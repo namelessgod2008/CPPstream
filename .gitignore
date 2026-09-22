@@ -1,0 +1,22 @@
+# Build trees
+build/
+cmake-build-*/
+out/
+
+# CMake / tooling artefacts
+compile_commands.json
+.cache/
+.cmake/
+
+# IDE
+.idea/workspace.xml
+.idea/shelf/
+.idea/*.iml
+.vscode/
+
+# The JDK probe under tests/jdk is source only
+*.class
+
+# Editor / OS noise
+*.swp
+.DS_Store
