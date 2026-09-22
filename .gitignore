@@ -1,17 +1,16 @@
-# Build trees
+# Build trees (CLion writes build/ and cmake-build-<config>/)
 build/
+cmake-build-debug/
 cmake-build-*/
-out/
 
 # CMake / tooling artefacts
 compile_commands.json
 .cache/
 .cmake/
+out/
 
 # IDE
-.idea/workspace.xml
-.idea/shelf/
-.idea/*.iml
+.idea/
 .vscode/
 
 # The JDK probe under tests/jdk is source only
