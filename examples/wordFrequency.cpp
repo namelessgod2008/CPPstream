@@ -14,8 +14,10 @@
 #include <vector>
 
 int main() {
-    const std::vector<std::string> text{"the", "quick", "brown", "fox", "jumps", "over", "the",
-        "lazy", "dog", "the", "fox", "jumps"};
+    const std::vector<std::string> text{
+        "the", "quick", "brown", "fox", "jumps", "over",
+        "the", "lazy",  "dog",   "the", "fox",   "jumps",
+    };
 
     // groupingBy with a downstream counting() collector: one pass, one map.
     const auto counts = cppstream::Stream<std::string>::of(text).collect(
@@ -31,14 +33,13 @@ int main() {
     for (const auto& entry : counts.entrySet()) {
         ranked.emplace_back(entry.getKey(), entry.getValue());
     }
-    std::sort(ranked.begin(), ranked.end(),
-        [](const std::pair<std::string, std::int64_t>& left,
-            const std::pair<std::string, std::int64_t>& right) {
-            if (left.second != right.second) {
-                return left.second > right.second;
-            }
-            return left.first < right.first;
-        });
+    std::ranges::sort(ranked, [](const std::pair<std::string, std::int64_t>& left,
+                                 const std::pair<std::string, std::int64_t>& right) {
+        if (left.second != right.second) {
+            return left.second > right.second;
+        }
+        return left.first < right.first;
+    });
 
     std::cout << "distinct words: " << counts.size() << '\n';
     for (const auto& [word, count] : ranked) {

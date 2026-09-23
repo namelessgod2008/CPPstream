@@ -11,8 +11,8 @@ namespace {
 /// A Collector that sums ints, spelled with Collector::of exactly as Java's
 /// Collector.of is.
 cppstream::Collector<int, int, int> summingCollector() {
-    return cppstream::Collector<int, int, int>::of([]() { return 0; },
-        [](int& accumulator, int& element) { accumulator += element; },
+    return cppstream::Collector<int, int, int>::of(
+        [] { return 0; }, [](int& accumulator, int& element) { accumulator += element; },
         [](int&& left, int&& right) { return left + right; },
         [](int&& accumulator) { return accumulator; },
         {cppstream::Characteristics::identityFinish});
@@ -40,7 +40,7 @@ TEST_CASE("Collectors are copyable specification objects")
     // The pipeline is move-only; the collector is not. That asymmetry is what
     // lets the combinators hold a downstream collector by value.
     const cppstream::Collector<int, int, int> original = summingCollector();
-    const cppstream::Collector<int, int, int> copy = original;
+    const cppstream::Collector<int, int, int>& copy = original;
 
     CHECK(copy.has(cppstream::Characteristics::identityFinish));
     CHECK(std::move(original).finisher()(0) == 0);

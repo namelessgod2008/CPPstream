@@ -92,7 +92,7 @@ public:
 
     /// Java: Optional.get(). Throws NoSuchElementException, with Java's exact
     /// message, when the Optional is empty.
-    const T& get() const& {
+    [[nodiscard]] const T& get() const& {
         if (!value_) {
             throw NoSuchElementException("No value present");
         }
@@ -114,11 +114,11 @@ public:
     }
 
     /// Java: Optional.orElse(other).
-    T orElse(const T& defaultValue) const { return value_ ? *value_ : defaultValue; }
+    [[nodiscard]] T orElse(const T& defaultValue) const { return value_ ? *value_ : defaultValue; }
 
     /// Java: Optional.orElseGet(supplier).
     template <class F>
-    T orElseGet(F supplier) const {
+    [[nodiscard]] T orElseGet(F supplier) const {
         if (value_) {
             return *value_;
         }
@@ -126,12 +126,12 @@ public:
     }
 
     /// Java 10: Optional.orElseThrow() with no argument.
-    const T& orElseThrow() const& { return get(); }
+    [[nodiscard]] const T& orElseThrow() const& { return get(); }
 
     /// Java: Optional.orElseThrow(exceptionSupplier). The supplier returns the
     /// exception to throw, so the throw site stays at the call site.
     template <class F>
-    const T& orElseThrow(F exceptionSupplier) const& {
+    [[nodiscard]] [[nodiscard]] const T& orElseThrow(F exceptionSupplier) const& {
         if (!value_) {
             throw std::invoke(exceptionSupplier);
         }
@@ -164,7 +164,7 @@ public:
     /// an empty Optional, matching Java's Optional.ofNullable wrapping.
     template <class F>
         requires(!std::is_void_v<std::invoke_result_t<F, const T&>>)
-    auto map(F mapper) const
+    [[nodiscard]] [[nodiscard]] [[nodiscard]] auto map(F mapper) const
         -> Optional<std::remove_cvref_t<std::invoke_result_t<F, const T&>>> {
         using U = std::remove_cvref_t<std::invoke_result_t<F, const T&>>;
         if (!value_) {
@@ -178,7 +178,7 @@ public:
     /// which C++ cannot detect, so an empty Optional is passed through as-is.
     template <class F>
         requires isOptional<std::invoke_result_t<F, const T&>>
-    auto flatMap(F mapper) const -> std::invoke_result_t<F, const T&> {
+    [[nodiscard]] auto flatMap(F mapper) const -> std::invoke_result_t<F, const T&> {
         using R = std::invoke_result_t<F, const T&>;
         if (!value_) {
             return R();
@@ -188,7 +188,7 @@ public:
 
     /// Java: Optional.filter(predicate).
     template <class P>
-    Optional filter(P predicate) const {
+    [[nodiscard]] [[nodiscard]] [[nodiscard]] Optional filter(P predicate) const {
         if (!value_ || !std::invoke(predicate, *value_)) {
             return Optional();
         }
@@ -200,14 +200,14 @@ public:
     /// Declared here but defined in Stream.h, because the return type must be a
     /// complete Stream<T>. This is the include-cycle break described in
     /// DESIGN.md section 7.4: include <cppstream/cppstream.h> to use it.
-    Stream<T> stream() const;
+    [[nodiscard]] Stream<T> stream() const;
 
     // --- Interop and comparison --------------------------------------------
 
     /// Explicit escape hatch to std::optional; the implicit conversion operator
     /// below makes this optional, but reads better when the target type is not
     /// obvious from context.
-    std::optional<T> unwrap() const& { return value_; }
+    [[nodiscard]] std::optional<T> unwrap() const& { return value_; }
     std::optional<T> unwrap() && { return std::move(value_); }
 
     operator std::optional<T>() const& { return value_; }              // NOLINT(google-explicit-constructor)

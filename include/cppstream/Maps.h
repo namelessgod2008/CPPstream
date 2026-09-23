@@ -39,9 +39,8 @@ public:
     /// produces. K and V cannot be deduced through a nested type, so this one
     /// always needs its template arguments spelled out.
     template <class K, class V, class... Rest>
-        requires (std::same_as<std::remove_cvref_t<Rest>, typename Map<K, V>::Entry> && ...)
-    [[nodiscard]] static HashMap<K, V> ofEntries(
-        typename Map<K, V>::Entry first, Rest&&... rest) {
+        requires(std::same_as<std::remove_cvref_t<Rest>, typename Map<K, V>::Entry> && ...)
+    [[nodiscard]] static HashMap<K, V> ofEntries(const Map<K, V>::Entry& first, Rest&&... rest) {
         HashMap<K, V> result;
         result.put(first.getKey(), first.getValue());
         (result.put(rest.getKey(), rest.getValue()), ...);
@@ -72,7 +71,7 @@ public:
 
     /// Java 9: Map.entry(key, value), an immutable pair.
     template <class K, class V>
-    [[nodiscard]] static typename Map<K, V>::Entry entry(K key, V value) {
+    [[nodiscard]] static Map<K, V>::Entry entry(K key, V value) {
         return typename Map<K, V>::Entry(std::move(key), std::move(value));
     }
 };

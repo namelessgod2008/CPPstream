@@ -77,7 +77,7 @@ public:
 
     T& get(int index) override { return values_[checkedIndex(index)]; }
 
-    const T& get(int index) const override { return values_[checkedIndex(index)]; }
+    [[nodiscard]] const T& get(int index) const override { return values_[checkedIndex(index)]; }
 
     T set(int index, const T& element) override {
         this->checkNotFrozen();

@@ -21,6 +21,7 @@ add_executable(cppstream_tests
     testCollector.cpp
     testCollectors.cpp
     testGatherer.cpp
+    testParallel.cpp
     testRanges.cpp
     testSet.cpp
     testMap.cpp

@@ -20,9 +20,9 @@
 
 ### 非目标
 
-- **不追求性能**。目标是保真与可读性。每元素一次虚调用/间接调用是可接受成本。快路径只做了一处、而且是与 Java 同源的那一处：`Stream::sizeHint()` 让 `sorted` / `reversed` / `toArray` 按源尺寸一次分配（§7.8），不是给管道做 ranges 特化。
+- **不追求性能**。目标是保真与可读性。每元素一次虚调用/间接调用是可接受成本。快路径只做了两处、而且都是与 Java 同源的：`Stream::sizeHint()` 让 `sorted` / `reversed` / `toArray` 按源尺寸一次分配（§7.8），以及并行流（§7.10）——后者是唯一一处以吞吐为目标的功能，因此它的语义代价也记得最清楚。
 - **不做线程安全容器**。与 Java 一致：`ArrayList` / `HashMap` 非线程安全。
-- **第一版不做并行流**。
+- **不做可切分的源**。并行流不做 `Spliterator` 那套切分协议，执行模型见 §7.10；`parallel()` 之后的阶段按批并行，源本身永远顺序拉取。
 
 ---
 
@@ -46,7 +46,7 @@
 
 **头文件后缀用 `.h`**：C++ 标准从未规定后缀，`.h` / `.hpp` 都是社区约定。`.hpp` 的价值在于标记"C++ only"、避免与 C 头文件撞名（Boost 就这么干）。本库是纯 C++23、include 路径自带 `cppstream/` 前缀，不存在撞名风险，因此用更短的 `.h`。
 
-`.clang-format` + `.clang-tidy` 落地约束（CLion 内置这两个工具，无需额外安装）：
+`.clang-format` + `.clang-tidy` 落地约束（CLion 内置这两个工具，无需额外安装；可执行文件路径与调用方式见 §4.1）：
 
 - `readability-identifier-naming`：`ClassCase: CamelCase`，`FunctionCase: camelBack`，`VariableCase: camelBack`，`MemberCase: camelBack`，`EnumConstantCase: camelBack`，`PrivateMemberSuffix: '_'`
 - `.clang-format` 基于 Google，`ColumnLimit: 100`，`NamespaceIndentation: None`，`PointerAlignment: Left`
@@ -155,6 +155,47 @@ option(CPPSTREAM_ENABLE_SANITIZERS "ASan + UBSan"       OFF)
 - 警告列表单独放进 `cppstream_warnings` INTERFACE target，只挂到 tests/examples 上，不污染使用者：`-Wall -Wextra -Wpedantic -Wconversion -Wshadow -Wold-style-cast -Wnon-virtual-dtor`。`-Wnon-virtual-dtor` 对本库尤其重要（虚基类层级）。
 - 测试用 `include(CTest)` + 普通 `add_test`，不用 `doctest_discover_tests`（后者依赖 doctest 仓库的 CMake 模块；vendor 单头文件时可以直接 `add_test(NAME cppstream_tests COMMAND cppstream_tests)`，CLion 里点运行按钮的体验更好）。
 - Sanitizer 打开时额外挂 `-fsanitize=address,undefined -fno-omit-frame-pointer`。
+
+### 4.1 clang-format / clang-tidy（CLion 自带，无需安装）
+
+`which clang-format` 是空的，但 CLion 2026.2 自己带了一套（本机路径）：
+
+| 工具 | 路径 | 版本 |
+|---|---|---|
+| clang-format | `/opt/clion-2026.2.1/plugins/clion-radler/DotFiles/linux-x64/clang-format` | 22.0.0git |
+| clang-tidy | `/opt/clion-2026.2.1/bin/clang/linux/x64/bin/clang-tidy` | 23.0.0git |
+
+```sh
+CF=/opt/clion-2026.2.1/plugins/clion-radler/DotFiles/linux-x64/clang-format
+CT=/opt/clion-2026.2.1/bin/clang/linux/x64/bin/clang-tidy
+GCC_INC=/usr/lib/gcc/x86_64-pc-linux-gnu/16/include   # 见下面第 2 条
+
+# 格式化整份文件：在仓库根目录执行，工具自己往上找 .clang-format
+# （历史文件会被顺带重排，见下面"现状"，所以改老文件时更常用下面这条）
+"$CF" -i include/cppstream/Stream.h
+
+# 只格式化自己改动的行（行号取 git diff 里 @@ 头"新文件侧"的范围）
+"$CF" -i --lines=92:114 --lines=1115:1383 include/cppstream/Stream.h
+
+# 静态检查：头文件直接当 TU 喂进去最快，整库 TU 会跑很久
+"$CT" --config-file=.clang-tidy include/cppstream/Parallel.h -- \
+    -std=c++23 -Iinclude -x c++-header -isystem "$GCC_INC"
+
+# 测试 / 示例是普通 TU
+"$CT" --config-file=.clang-tidy tests/testParallel.cpp -- \
+    -std=c++23 -Iinclude -Itests/third_party/doctest -isystem "$GCC_INC"
+```
+
+两个踩过的坑，记在这里免得再踩：
+
+1. **`.clang-format` 里只能写 `Standard: Latest`，不能写 `c++23`。** clang-format 的 `Standard` 枚举只到 `c++20`，写 `c++23` 会让整份配置解析失败（`unknown enumerated scalar`）；更麻烦的是读不动的配置会让 IDE **静默退回默认样式**，看起来"有配置"其实没生效。`Latest` 是"本版本支持的最新标准"，语义等价，且不会随工具升级失效。
+2. **命令行跑 clang-tidy 要补一个 `-isystem`。** CLion 的 `bin/clang/linux/x64/bin` 下只有 `clang-tidy` / `clangd` / `clazy-standalone` / `llvm-symbolizer`，没有 clang 的 resource dir（`lib/clang/<ver>/include/stddef.h`），于是 clang-tidy 以 `'stddef.h' file not found` 致命错误收尾。致命错误会让 AST 不完整，还会顺带报出假告警（例如 `readability-convert-member-functions-to-static`）。补上 GCC 的 include 目录即可；CLion 自己的 clang-tidy 集成处理了这件事，只有命令行需要。
+
+**M11 结束时的状态**：
+
+- 本次改动的文件都已按 `.clang-format` 排过（新文件整份排，改动文件只排碰过的 hunk）；`clang-tidy` 在 `Parallel.h`、`testParallel.cpp` 上是**零告警**，`Stream.h` 里唯一一条 `bugprone-easily-swappable-parameters`（构造函数里 `SizeHint` / `Budget` 同型、可互换）用带说明的 `NOLINTNEXTLINE` 显式记下，没有偷偷绕过去。
+- 历史代码不干净：44 个文件、约 1300 行（一方代码共 15272 行）与 `.clang-format` 的期望不一致；整库重排会产出一份横跨 50 个文件的大 diff，所以没顺手做——要做应当单独一次提交。典型差异是 lambda 形参对齐、`->` 返回类型的换行位置、`#include` 分组顺序。
+- `clang-tidy` 还有 158 条告警（每个头文件单独跑一遍，同一条只在其所属文件的 TU 里计一次；`Stream.h` 26 条、`Collectors.h` 35 条、`TreeSet.h` 30 条）。前排全是纯风格规则：`readability-redundant-typename` 67、`readability-redundant-lambda-parameter-list` 46（`[x]() mutable -> T` 是本库统一写法）、`readability-use-std-min-max` 12、`readability-named-parameter` 9，其余都是个位数。这些要一起决定——关掉，还是全库修一遍；零散改只会让风格更不一致。（本次新增代码里只剩 3 条这类风格告警，都在 `tests/testParallel.cpp`，为了跟既有写法一致故意留着。）
 
 ---
 
@@ -601,6 +642,50 @@ Java 的管道之所以不用把元素逐个塞进"会反复扩容的 vector"，
 
 **状态存在闭包里，不需要堆上状态对象**：Java 每个阶段分配一个 `ReferencePipeline` 节点 + 状态对象；本库用 move-only lambda 按值捕获状态（如 `distinct` 的 `std::unordered_set`、`sorted` 的缓冲 vector），随阶段一起被 move 进下一层。少一次间接寻址，也不需要 `shared_ptr`。
 
+### 7.10 并行执行模型（`parallel()` / `parallelStream()`）
+
+Java 的并行流是"把源切开 + ForkJoinPool 上分治"：`Spliterator.trySplit()` 递归对半分，任务提交给 commonPool，终结操作用 `Collector::combiner` 把各分片的累加器合并起来。
+
+**本库的源不可切分**，所以照抄这条路等于重写整条管道。这里的阶段是 `std::move_only_function` 拉取闭包（§5.3），一个 `NextFn` 就是"给我下一个元素"，没有任何"能不能对半劈开"的信息，也无法凭空发明：`filter` 之后的元素个数要真跑一遍才知道，`iterate` 根本没有第二个副本可切。唯一能在不改架构的前提下真正并行化用户 lambda 的做法是：
+
+**`parallel()` 之后的阶段按批处理，每批丢到共享线程池上并行求值，再按原顺序吐回。**
+
+```cpp
+// 概念示意：map 的并行分支
+pull up to `chunk` elements from the upstream;      // 顺序的，但每批只有一次
+parallelPool().forEach(batch.size(), [&](i) { out[i] = mapper(in[i]); });
+// out[i] 永远对应 in[i]，所以遭遇顺序不变
+```
+
+四个要件：
+
+- **`Budget`（拉取预算）**：`sizeHint` 回答"这个阶段**会**产出多少"，`Budget` 回答"这个阶段**可以**往前读多少"。两者不同：`filter` 丢掉 `sizeHint`（产出个数未知）但保留 `Budget`（输入个数已知）。批次大小只会取 `min(chunk, Budget 剩余)`，且 `Budget` 只会被下界收紧、永不被放宽，所以"读到预算耗尽"就等于"上游真的空了"。源没有任何界（`iterate` / `generate`、以及 `flatMap` 之后）时 `Budget` 是 `nullopt`，阶段退化成一次一个元素——**并行管道永远不会预读到它界不住的地方**，`iterate(...).parallel().findFirst()` 因此不会挂死。代价是：**没有已知规模的源，阶段就是顺序执行的**（Java 对 `generate()` 也无能为力，它同样不可切分）。
+
+- **`ThreadPool`（`Parallel.h`）**：进程级单例、线程数在首次使用时定为 `hardware_concurrency()`，之后只能通过 `cppstream::setParallelism(n)` 调整**可用**的部分（不动线程，改一个 atomic）。`forEach(count, fn)` 用共享游标动态派活而不是静态均分：元素的开销很少均匀，一个慢元素不该拖住整块。任一线程抛出的第一个异常在全部任务收拢后重抛给调用者。
+
+- **嵌套保护**：从池内工作线程发起的并行阶段**内联执行**而不是再排一个任务然后等线程。这不是优化，是防死锁：外层批次占着 N 个 worker 且都在等内层结果时，池里没有空线程可派，ForkJoinPool 靠 work-stealing 解决这个问题，这里用一个 `thread_local` 标志解决——代价是嵌套的并行降级为顺序，与 ForkJoin 无法切分时的取舍相同。测试 `a parallel stage pulled from inside a worker degrades instead of deadlocking` 盯着它。
+
+- **终结操作的分片合并**：`collect` / `reduce`（两个重载）/ `min` / `max` / `sum` 把一批切成 `parallelism()` 片，每片在自己的累加器上累加，再**按遭遇顺序**逐个 `combiner` 合并进一个总累加器。这正是 §8 第 8 条里被点名的"`Collector::combiner` 变成硬需求"——它是构造参数，一直都在，这次终于被调用（`Gatherer::combiner` 仍然缺席，理由见下）。合并顺序保证了 `toList` / `joining` / `groupingBy` 这些对顺序敏感的收集器在并行下也给出与顺序版逐字节相同的结果。内存上每次只保留 `parallelism()` 个分片，不会随元素总数增长。
+
+**哪些真的并行、哪些是屏障**（`parallel()` 之后）：
+
+| 阶段 / 终结操作 | 并行？ | 说明 |
+|---|---|---|
+| `map` / `filter` / `peek` | ✅ 批处理 | 一元、无状态，批内顺序无关，结果按序写回 |
+| `forEach` | ✅ 批处理 | 动作重叠执行，元素仍按遭遇顺序取出 |
+| `collect` / `reduce` / `min` / `max` / `sum` | ✅ 分片 + 有序合并 | 累加器须可结合，与 Java 对并行归约的要求一致 |
+| `anyMatch` / `allMatch` / `noneMatch` | ✅ 批处理 + 短路 | 一批命中就停止拉取，靠一个 relaxed atomic 做见证 |
+| `flatMap` | ⚠️ 部分 | mapper 并行求值；内层流仍**惰性且按序**排空（只有外层批次是急切的） |
+| `sorted` / `reversed` / `distinct` | ❌ 屏障 | 有状态 / 需要全量，一次一个元素；并行标志继续往下传 |
+| `mapMulti` / `gather` | ❌ 屏障 | 每个输入可产出任意多个元素（§7.7），批处理必须先物化 |
+| `count` / `toArray` / `toList` / `findFirst` / `findAny` / `average` / `forEachOrdered` | ❌ 顺序 | 自身无可并行的算力；上游阶段照常批处理。`findFirst` 更短：只拉一个元素，所以有界并行流不会被它抽干 |
+
+三个必须记住的语义后果（都写进了 §8 第 8 条）：
+
+1. **标志只作用于调用点之后**。阶段在 `parallel()` 之前就已经构造完成，拉取阶段的并行能力只能作用于自己执行的代码。惯用写法（`collection.parallelStream()`、`Stream.of(...).parallel().map(...)`）本来就把标志放在重活之前，所以移植过来的 Java 代码落在并行路径上；`stream.map(f).parallel()` 里的 `f` 则不会并行。
+2. **批处理有预读**。`findFirst()` 会读过一批，`peek` / `forEach` 的动作不再按顺序完成。`chunk` 取 1024，终结操作再乘 worker 数，预读量有界但非零。
+3. **用户 lambda 必须是线程安全的**。顺序管道里带可变状态的 `mutable` lambda 能跑，并行管道里就是数据竞争——Java 的"非干扰 / 无状态"要求在这里同样成立。
+
 ### 7.2 终结操作（`&&` 限定）
 
 `forEach` / `forEachOrdered`、`count`（返回 `int64`）、`toArray`（`std::vector<T>`）、`toList`（返回冻结的 `ArrayList<T>`）、`collect`、`reduce`（两种重载）、`min` / `max`、`findFirst` / `findAny`、`anyMatch` / `allMatch` / `noneMatch`、`sum` / `average`（用 concept 约束到算术类型）。
@@ -613,6 +698,8 @@ Optional<double> average() && requires std::integral<T> || std::floating_point<T
 ```
 
 这是全库唯一一处"因为 C++ 更好所以不需要复刻"的地方。缺失的 `IntStream.range(a, b)` 由 `Stream<T>::range` / `rangeClosed` 补上。
+
+**并行流下的终结操作**：`forEach` / `collect` / `reduce`（两种重载）/ `min` / `max` / `sum` / 三种 `match` 在 `parallel()` 之后按批并行——`collect` 一系走"每片一个累加器 + 按遭遇顺序 `combiner` 合并"，`match` 一系靠一批命中就停止拉取。`forEachOrdered` / `count` / `toArray` / `toList` / `findFirst` / `findAny` / `average` 保持顺序执行，只享受上游阶段的并行：它们自身没有可并行的算力，而 `findFirst` 的"只拉一个元素"恰恰是它该有的短路。分片合并要求累加器可结合，与 Java 对并行归约的要求一致。详见 §7.10。
 
 ### 7.3 Collector 模型
 
@@ -651,6 +738,8 @@ concept CollectorLike = CollectorType<C> && requires(const C& c) { /* 四个函�
 ```
 
 `Characteristics` 存 `std::vector` 而不是 `initializer_list`：`mapping` / `filtering` / `flatMapping` 要把下游收集器的 characteristics 原样转发，concept 也需要能读取它。
+
+`concurrent` 仍然只为保真而存在：本库的并行 `collect` 不共享累加器，而是每片一个、按遭遇顺序合并，所以不需要"并发安全的累加器"这一承诺。真正被 `parallel()` 用起来的是 `combiner`（§7.10）。
 
 累加器签名是 `void(A&, T&)` 而非 `void(A&, const T&)`：Java 的 `BiConsumer<A, super T>` 拿到的就是元素对象本身，而管道交出的元素是刚从源里取出的、无人别名的值，所以累加器可以自由 move（`toList` 就是 `push_back(std::move(element))`）。写成 `const T&` 的 lambda 依然能装进 `std::function<void(A&, T&)>`，两种写法都可用。
 
@@ -696,7 +785,7 @@ Java 把它们挂在 `Stream` / `IntStream` 接口的静态方法上；C++ 的�
 
 ## 8. 偏离清单（逐条记录原因）
 
-37 条里 32 条是被语言特性逼出来的，5 条（第 18、20、23、26、36）是主动增益；每条都注明了属于哪一类。
+37 条里 31 条是被语言特性逼出来的，5 条（第 18、20、23、26、36）是主动增益，第 8 条是执行模型上的让步（见 §7.10）；每条都注明了属于哪一类。
 
 | # | Java | 本库 | 原因 |
 |---|---|---|---|
@@ -707,7 +796,7 @@ Java 把它们挂在 `Stream` / `IntStream` 接口的静态方法上；C++ 的�
 | 5 | `map.put(k,v)` 返回旧值或 null | 返回 `Optional<V>`，空表示原本没有映射 | C++ 无通用空值；与第 4 条同一条规则（null ↔ `Optional::empty`）。`computeIfAbsent` / `computeIfPresent` / `merge` 的回调同样返回 `Optional<V>`，以表达 Java 的"返回 null 表示不建立/删除映射" |
 | 6 | `List.of(a,b,c)` | `Lists::of(a,b,c)` | `List<T>::of` 定义需要 `ArrayList<T>` 完整类型，会造成 `List.h → ArrayList.h → List.h` 环 |
 | 7 | `IntStream` / `LongStream` / `DoubleStream` | 不存在；`Stream<T>` + concept 约束的 `sum` / `average`；`Streams::range` | C++ 无装箱成本，原始类型流的目的消失 |
-| 8 | `parallel()` / `parallelStream()` | 第一版声明但抛 `UnsupportedOperationException` | ForkJoin 无对应物；会让 `Collector::combiner` 变成硬需求，工作量翻倍 |
+| 8 | 并行流 = `Spliterator.trySplit()` 切分源 + ForkJoinPool + `combiner` 归并 | `parallel()` / `parallelStream()` 已实现，标志与顺序语义保真；**执行模型换成"`parallel()` 之后的阶段按批上共享线程池"**（§7.10） | 本库的源是拉取闭包，没有"对半劈开"的信息，复刻 `trySplit()` 等于重写全部中间操作。换来三条必须记住的语义差别：标志只作用于调用点之后、批处理有预读、无界源退化为顺序。副产品是 `Collector::combiner` 成了并行终结操作的硬需求——它一直在构造参数里，这次终于被调用；`Gatherer::combiner` 仍然缺席，因为 `gather` 是可产出任意多元素的屏障 |
 | 9 | `Optional<T>` | 自建 `Optional<T>`（内部 `std::optional`），隐式双向转换 | 方法名差异过大，别名保真度不足（§5.5） |
 | 10 | `Collection` 允许元素为 null | 容器拒绝 null，抛 `NullPointerException` | 用户决策；且值类型本就没有 null 概念 |
 | 11 | `list.subList(a,b)` 返回视图 | 返回 `std::unique_ptr<ListView<T>>`，**活视图** | M8 补齐。视图持 `const List<T>*` + 可选的可写指针 + 偏移；生命周期按第 17 条同款"文档而非机制"约束。从 const list 取的视图是只读的，见第 35 条 |
@@ -733,7 +822,7 @@ Java 把它们挂在 `Stream` / `IntStream` 接口的静态方法上；C++ 的�
 | 31 | `Collector<T, A, R>` 的 `A` 在 Java 里是 `?` | `A` 必须可命名（`AveragingState`、`std::pair<A1, A2>` 等） | C++ 返回类型不能含未知量；`Collectors::AveragingState` 因此是公开但标注为实现细节的嵌套类型 |
 | 32 | `Map` 的 `keySet` / `values` / `entrySet` / `equals` / `hashCode` 由 `AbstractMap` 提供 | 非虚成员，直接实现在 `Map` 上，由 `visitEntries` 原语驱动 | 若声明为纯虚，`keySet()` 返回 `HashSet<K>` 会强制每个 `TreeMap` 的键可哈希，即使调用者从不需要键集 |
 | 33 | `Downstream.push` 可返回 `false`，`isRejecting()` 可返回 `true` | `push` 恒返回 `true`，`isRejecting()` 恒返回 `false` | 推送的拒绝只发生在短路的下游（如 `limit`）上，而本库的管道是拉取的：`limit` 停止拉取即可，不需要反向通知。gatherer 想提前收工，就从 integrator 返回 `false`——同一个信号，且立刻生效 |
-| 34 | `Gatherer.of(...)` 由目标类型推断 `T` / `R`，且有 `combiner` 与 `andThen` | 类型实参在调用点显式给出（`Gatherers::of<T,R>`）；无 `combiner`；无 `andThen` | C++ 没有目标类型推断，返回类型无法告诉编译器 `R` 是什么。`combiner` 只在并行流里合并部分状态，而并行流不做（第 8 条）。`andThen` 在顺序管道里等价于两次 `gather()`（第二个 gatherer 的输入就是第一个的输出，finisher 顺序也一致），因此组合能力本来就在管道层 |
+| 34 | `Gatherer.of(...)` 由目标类型推断 `T` / `R`，且有 `combiner` 与 `andThen` | 类型实参在调用点显式给出（`Gatherers::of<T,R>`）；无 `combiner`；无 `andThen` | C++ 没有目标类型推断，返回类型无法告诉编译器 `R` 是什么。`combiner` 只在并行流里合并部分状态，而 `gather` 即使加了 `parallel()` 也是屏障（它每个输入可产出任意多个元素，§7.10），所以它仍是一个从不被调用的必需参数。`andThen` 在顺序管道里等价于两次 `gather()`（第二个 gatherer 的输入就是第一个的输出，finisher 顺序也一致），因此组合能力本来就在管道层 |
 | 35 | 视图总是可写的（`Collections.unmodifiableList` 除外） | 从 const 容器取到的视图是只读的：所有 mutator、`iterator()` 与交出可写引用的 `forEach` 都抛 `UnsupportedOperationException`，`constIterator()` / range-for 正常；map 范围视图的**可写** `V* get(key)` 重载同样抛，只读读取要走 const 重载（`const V* get(key) const`）。只读视图派生出的子视图也是只读的（**不抛**，与 Java 的 `unmodifiable*` 包装一致）。视图对象自身声明为 `const` 时，mutator 是编译错误而不是运行期异常 | C++ 的 const 是类型系统的一部分。`iterator()` 交出可写引用，而 const 容器没有可写引用可交，所以它必须抛。视图对象自身若不是 const，还多一层编译期保护 |
 | 36 | 无 `sizeHint` / `ofRange` | `Stream<T>::sizeHint()` 与 `Stream<T>::ofRange(range)` | 主动增益，对齐 Java 的 `Spliterator.estimateSize()` 与"任何集合都能成为流源"两件事，见 §7.8 / §7.9 |
 | 37 | 有序容器的比较器是**构造期**的 `Comparator`，`comparator()` 返回它 | 有序容器是 `TreeSet<T, Compare>` / `TreeMap<K, V, Compare>`，`Compare` 是**编译期**的 std 风格 bool 比较器；`comparator()` 返回 Java 风格的 `Comparator<T>`，另有自由函数 `comparatorFrom<T>(Compare)` 做桥接 | C++ 不能在运行期给 `std::set` 换比较器——那是数据结构的一部分，不是参数。所以 `Compare` 只能进模板参数（§6.5），这是"包装 std 容器"的必然结果。但 Java 的 `comparator()` 返回类型是 `Comparator`，且递减视图必须返回真正反向的那一个；std 的 bool 比较器无法取反后仍当 `Compare` 用，因此返回值统一为 `Comparator<T>`，由 `comparatorFrom` 包一层 `std::function`（§11 第 23 条） |
@@ -759,6 +848,7 @@ Java 把它们挂在 `Stream` / `IntStream` 接口的静态方法上；C++ 的�
 - **递减视图靠"对拍整段转录"验证，而不是逐条猜期望值**：M10 里写了两支探针 `tests/jdk/DescendingProbe.java` / `DescendingEdgeProbe.java`，另外各写了一份 Java 与 C++ 的转录程序，把 `NavigableSet` / `NavigableMap` 的**每一个**成员（迭代、`size`、`first` / `last`、四个查找、`headSet` / `tailSet` / `subSet` 的各种开闭组合、`descendingIterator` / `descendingSet`、`navigableKeySet` / `descendingKeySet`、`firstEntry` / `pollLastEntry`……）在一整组不同窗口（全量升序与递减、四种开闭区间、两侧无界窗口、双重取反、以及被接受却为空的 `[k, k)`）上的输出打印出来，然后 `diff` 两份文本。最终 777 行的集合转录与 606 行的映射转录**逐字节相同**。这比"挑几条断言"强得多：`[40, 40)` 这种被接受却为空的窗口、异常消息的用词、`floor` 的夹取方向，全都是这种对拍顺手抓出来的。
 - **一次真实死循环就是这么抓到的**：对拍之外的 `testDescendingViews.cpp` 写了 `[20, 40)` 递减视图上的 `headSet(40, false)`——Java 接受它并给出空集，而本库当时把空窗口的原始边界当成了有效区间（`upper_bound(40)` 在 `lower_bound(40)` 之后），`size()` 里的 `std::distance` 于是从 `end()` 继续往前走，测试挂死。修法与回归用例见 §6.8。教训是"被接受的窗口"与"非空窗口"是两件事，Java 只保证前者。
 - **`sizeHint` 是可观测行为，不是内部优化**：它被当成正常语义来断言（每个阶段该传、该丢、该夹紧都有用例），因为一个悄悄失传的提示无法用别的方式验证。
+- **并行路径按"与顺序版对拍"验证**：并行不改变结果，只改变谁来算，所以 `testParallel.cpp` 里每条路径都写成"顺序版 == 并行版"。但只对拍还不够——一个永远走顺序分支的实现也能全绿，所以另外用 `std::set<std::thread::id>` 断言批次确实散到了多个线程上、用 `CountingSource` 断言无界源没有被预读（`findFirst` 的拉取次数远小于源的长度）、用"mapper 内部再跑一条并行管道"断言池内嵌套不死锁、用 `setParallelism(1)` 断言整体退化路径。
 
 一条 M8 抓到的真 bug：`ArrayDequeIterator::remove()` 最初沿用了 `std::list` 的写法（`erase(it)` 后沿用游标）。`std::deque::erase` 会让**整条容器**的迭代器失效，于是下一次 `hasNext()` 读到悬垂迭代器，在 `std::deque::pop_back` 的断言上炸掉。修法是从 `erase()` 的返回值重建游标（反向迭代器则用 `make_reverse_iterator(后继)`）。`ArrayList` / `LinkedList` 的迭代器没这个问题：一个用下标游标，另一个基于 `std::list`，两者 erase 后只有被删的那个失效。
 
@@ -781,12 +871,13 @@ Java 把它们挂在 `Stream` / `IntStream` 接口的静态方法上；C++ 的�
 | M8 | 活视图（`subList` / `keySet` / `values` / `entrySet`）、`Queue` / `Deque` + `ArrayDeque`、`descending*`、`gather()`、`sizeHint` 快路径与 `std::ranges` 互操作、去掉 RTTI | ✅ |
 | M9 | 有序范围视图 `subSet` / `headSet` / `tailSet` / `subMap` / `headMap` / `tailMap`（含开闭区间重载），栅栏规则按 JDK 实测复刻 | ✅ |
 | M10 | 补齐非并行流缺口：`descendingSet` / `descendingMap` / `descendingIterator` 改成方向标志驱动的**活视图**、`navigableKeySet` / `descendingKeySet`、`comparatorFrom` 桥接、空窗口的收敛修复、`Stream::mapMulti` | ✅ |
+| M11 | **并行流**：`Parallel.h`（共享线程池 + `parallelism()` / `setParallelism()`）、`Budget` 拉取预算、`parallel()` / `sequential()` / `isParallel()` 落地、`map` / `filter` / `peek` 批并行、`flatMap` 的 mapper 并行、`collect` / `reduce` / `min` / `max` / `sum` 分片合并、`forEach` 批并行、三种 `match` 并行短路、`Collection::parallelStream()`、`testParallel.cpp` | ✅ |
 
 排期上做过一次调整：原计划 M3 是"Stream 终结操作"、M4 才是容器。实际做的时候先把**基础**终结操作并在 M2 里交付了，因为惰性和短路是 Stream 的核心主张，没有终结操作就没法验证它们——用 `CountingSource` 断言"一个元素都没拉"比任何文档都有说服力。`collect` / `toList` 留在 M4，因为它们依赖 `Collector` 模型和 `ArrayList`。
 
 执行时又改了两次顺序：**M6 与 M5 互换**（`toSet` / `toMap` / `groupingBy` 的返回类型是 `HashSet` / `HashMap`，先有容器层才不用返工），以及把 `LinkedList` 放到 M7 一起做（它验证的是 `List` 接口是否真的可复用，与工具类同一批测更省时间）。
 
-M8 里**并行流明确不做**（第 8 条已固化），其余全部完成。顺序上先做"接口面"（`isSet` 去 RTTI、`descending*`、`Queue` / `Deque`），再做"最难的一处"（活视图），最后做 `gather()` 与 `sizeHint`。这个顺序的好处是每一批都能独立跑通三种配置，活视图那批出了问题时前面几批已经是绿的。
+M8 与 M9 里**并行流明确不做**（第 8 条当时固化为"声明但抛"），其余全部完成。顺序上先做"接口面"（`isSet` 去 RTTI、`descending*`、`Queue` / `Deque`），再做"最难的一处"（活视图），最后做 `gather()` 与 `sizeHint`。这个顺序的好处是每一批都能独立跑通三种配置，活视图那批出了问题时前面几批已经是绿的。这条欠账在 M11 里补上：并行流不是"再挂一个操作"，而是给阶段层加一条执行路径，所以放在所有阶段语义都冻结之后做，才不会边写并行边改语义。
 
 依赖关系：M2 只依赖 M1，可以完全用 `std::vector` 当源来验证，不必等容器层。这是排期的关键松弛点。M5 可与 M6 并行。
 
@@ -801,7 +892,7 @@ M8 里**并行流明确不做**（第 8 条已固化），其余全部完成。�
 | 1 | 容器实现策略 | **包装 std 容器**，不自己实现数据结构 | `ArrayList` 包 `std::vector`，`HashMap` 包 `std::unordered_map`，`TreeSet` 包 `std::set` |
 | 2 | 保真 vs 惯用法 | **保真优先** | 方法名、语义、异常行为对齐 Java；37 条偏离逐条记录于 §8 |
 | 3 | 容器 null 语义 | **拒绝 null**，抛 `NullPointerException` | 值类型本无 null 概念，只对指针/可空类型做检查 |
-| 4 | 并行流 | **第一版不做** | `parallel()` / `parallelStream()` **声明**但抛 `UnsupportedOperationException`，保留源码兼容性与缺口可见性 |
+| 4 | 并行流 | **做，但执行模型自定**（§7.10） | `parallel()` / `parallelStream()` 是真的；阶段按批上共享线程池，配 `Budget` 拉取预算界定预读。与 Java 的三点差别记在 §8 第 8 条；`Gatherer::combiner` 仍然缺席（`gather` 是屏障） |
 | 5 | 测试框架 | **doctest**，单头文件 vendor | configure 阶段不联网；`add_test` 而非 `doctest_discover_tests` |
 | 6 | 构建环境 | CLion 2026.2.1 内置 CMake 4.3.1 / Ninja 1.13.2 / GDB + 系统 `g++ 16.2.1` | 见 §4；`cmake_minimum_required(VERSION 3.25)`，对 CMake 4.x 合法 |
 | 7 | 命名 | **驼峰**：类/结构体/概念大驼峰，函数/变量/枚举值小驼峰 | private 成员允许尾下划线（`modCount_`）作为撞名消歧后缀 |
@@ -822,6 +913,7 @@ M8 里**并行流明确不做**（第 8 条已固化），其余全部完成。�
 | 22 | `descendingSet` / `descendingMap` 用副本还是视图 | **视图**，方向是 `TreeSetRangeView` / `TreeMapRangeView` 上的一个 `bool descending_`，栅栏仍存**升序**那一对 | Java 的 `DescendingSubMap` 就是同一棵树 + 同一个基类状态，只是把 `subCeiling` 映射到 `absFloor` 之类的"换义"操作。C++ 里若改成副本，`descendingSet().descendingSet()` 就无法回到原窗口，写透也没了。选方向标志后，`descendingSet()` 只是构造一个 `descending_` 取反的同窗口对象，"换义"集中在一处：四个查找先按升序问底层再按方向挑一对，`first` / `last` / `pollFirst` / `pollLast` / `headSet` / `tailSet` 同款；`subSet` 的窗口检查仍按升序那一对做，因为 Java 的 `DescendingSubMap.subMap` 就是把参数颠倒着传给基类构造器的（§6.8） |
 | 23 | `comparator()` 的返回类型 | **`Comparator<T>`**（Java 风格），递减视图返回 `base.reversed()`；自由函数 `comparatorFrom<T>(Compare)` 把 std 风格 `Compare` 桥接过来 | 视图的 `Compare` 是 std 风格的 bool 比较器，`std::set` 把它焊进了数据结构，无法"取反后再当 `Compare` 用"。要按 Java 的契约交出"这个视图实际使用的顺序"，返回值必须换成可组合的 `Comparator<T>`；对递减视图返回底层的升序比较器则是**主动错误**——调用者拿它去排序会得到反的结果。Java 的 `reverseOrder(natural)` 同样是一个新对象而不是底层比较器本身（§5.7、§8 第 37 条） |
 | 24 | 键集视图怎么持有窗口 | `TreeMapKeySetView<K, V, Compare>` **按值**持有一个 `TreeMapRangeView`，另存一个可写指针 | 范围视图本身就是"根指针 + 一对可选栅栏 + 方向"的把手：拷贝它不拷贝任何元素，也不会因为原临时对象析构而悬垂（这正是"视图对象拷贝后仍有效"的前提，与第 17 条的生命周期约定一致）。按值持有后，键集的每个成员都只是转发给窗口，`navigableKeySet` / `descendingKeySet` 就不需要各自重写一遍栅栏判定 |
+| 25 | 并行流怎么在没有可切分源的架构上落地 | **`parallel()` 之后的阶段按批并行**，配套 `Budget` 拉取预算与池内嵌套内联（§7.10） | 备选一：把拉取闭包换成可切分的 `Spliterator` 等价物——重写全部中间操作，且 `filter` / `iterate` 本来就给不出切分点。备选二：在 `parallel()` 边界把上游物化成一个 buffer——直接毁掉惰性，`findFirst()` 会先把源抽干。批次方案把改动关在阶段内部，惰性与遭遇顺序都保住，代价是标志不能回溯、以及有界的预读 |
 
 ### 关于第 11 条的补充
 
@@ -938,8 +1030,18 @@ M9 结束时记在案的四处缺口里，除并行流外全部关闭。“保�
 
 **测试规模（M10 结束时）**：223 个 `TEST_CASE` / 1402 条断言 + 6 个 CTest 用例，三种配置（Debug、`-Werror`、ASan+UBSan）全部通过；`-fno-rtti` 亦可直接构建。新增测试单元 `testDescendingViews.cpp`（14 个用例，其中一组专测"被接受却为空"的窗口）；`testSet.cpp` / `testMap.cpp` 中原先按"副本"写的断言改为按视图写并补了 `navigableKeySet` / `descendingKeySet` 的用例；`testStream.cpp` 补了三个 `mapMulti` 用例；`tests/jdk/` 新增两支递减探针；`examples/collectionTour.cpp` 补了一节递减视图与键集视图。与 JDK 的对拍转录扩到 777 行（集合）与 606 行（映射），逐字节相同。
 
+### M11 — 并行流（✅）
+
+M10 结束时唯一的记录在案缺口就是并行流，且当时的口径是"用户明确决定不做"。M11 把它做掉的难点不在"起线程"，而在**在不可切分的源上给出可解释的并行语义**：把源换成 `Spliterator` 等价物等于重写全部中间操作，在 `parallel()` 边界物化上游又会毁掉惰性。最后选的是第三方案——`parallel()` 之后的阶段按批上共享池，配一个 `Budget` 拉取预算来界定"能往前读多少"（§7.10、§11 第 25 条）。
+
+1. **`Parallel.h`**：固定大小的线程池单例，`forEach(count, fn)` 用共享游标动态派活、异常在收拢后重抛；`thread_local` 标志让池内发起的并行阶段内联执行，把嵌套并行的死锁换成嵌套降级（ForkJoinPool 用 work-stealing 解决同一问题）。`cppstream::setParallelism(n)` 只改"可用 worker 数"这个 atomic，不建销线程，所以可以在任意时刻调用。
+2. **`Budget` 与 `sizeHint` 分家**：`sizeHint` 是"这个阶段会产出多少"（`filter` 丢掉），`Budget` 是"这个阶段能往前读多少"（`filter` 保留）。批次大小取 `min(chunk, Budget 剩余)`，且 `Budget` 只会被收紧；源无界时是 `nullopt`，阶段退化为一次一个元素——`iterate(...).parallel().findFirst()` 因此不会预读挂死，`generate(...).parallel().limit(n)` 也能正常终止而无需任何特殊处理。
+3. **一元阶段批并行**：`map` / `filter` / `peek` 共用一个 `mapBatch`（`step` 把元素映射成 `optional<R>`，`nullopt` 表示丢弃，`filter` 就是这么写的），结果按 `out[i] ↔ in[i]` 写回，遭遇顺序天然保持。`flatMap` 用 `flatBatch`：只有外层批次是急切的，内层流仍然惰性按序排空，所以"内层无限 + `limit`"依旧成立。
+4. **终结操作分片合并**：`collect` / `reduce`（两种）/ `min` / `max` / `sum` 走同一个 `runParallelReduce`：一批切成 `parallelism()` 片，各片独立累加后**按遭遇顺序**逐个 `combiner` 合并。`Collector::combiner` 与 `Gatherer::combiner` 那个悬念就此落地——前者被调用（它从 M4 起就是构造参数），后者仍然缺席，因为 `gather` 是屏障。合并顺序保证 `toList` / `joining` / `groupingBy` 在并行下与顺序版逐字节相同。
+5. **短路与顺序的边界照旧**：三种 `match` 并行求值但一批命中即停止拉取；`findFirst` / `findAny` 仍只拉一个元素（有界并行流不会被它抽干）；`forEachOrdered` / `count` / `toArray` / `toList` / `average` 顺序执行；`sorted` / `reversed` / `distinct` / `mapMulti` / `gather` 是屏障，但并行标志继续往下传。
+
+**测试规模（M11 结束时）**：242 个 `TEST_CASE` / 1491 条断言 + 6 个 CTest 用例，三种配置（Debug、`-Werror`、ASan+UBSan）全部通过；`-fno-rtti` 亦可直接构建。新增测试单元 `testParallel.cpp`（19 个用例）：每条路径都拿顺序版当基准对拍，另有"并行确实用了多个线程"（`set<thread::id>` 计数）、"池内嵌套不死锁"、"无界源不预读"（`CountingSource` 数拉取次数）、"异常穿出并行阶段"、"`setParallelism(1)` 整体退化"、"`collect` 在 `groupingBy` 这类顺序敏感收集器上与顺序版相等"几条专门的用例。`Collection::parallelStream()` 让"先设标志再建阶段"成为默认写法。
+
 ### 下一步 — 未做的部分
 
-只剩**并行流**一处，仍然是用户明确决定不做的（§8 第 8 条）：`parallel()` 声明并抛 `UnsupportedOperationException`。真要实现需要 `Collector::combiner` 成为硬需求、`Gatherer::combiner` 补上、以及一套 fork-join 等价物。`mapConcurrent` 跟着它一起缺席——那个操作离开虚拟线程没有意义。
-
-非并行部分已无记录在案的缺口。M9 结尾列的三条（`descending*` 是副本、范围视图缺反向操作、`Stream.mapMulti`）都已在 M10 关闭。
+只剩 `Gatherers::mapConcurrent` 一处：Java 把它定义在虚拟线程上，离开那一层它就是一个 `map`，而 `Stream::map` 已经在了（§7.7）。除此之外无记录在案的缺口——M9 结尾列的三条在 M10 关闭，M10 结尾列的并行流在 M11 关闭。

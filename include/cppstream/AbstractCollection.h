@@ -116,13 +116,22 @@ public:
         // The container knows its size, so it passes it on: this is the hint that
         // lets stream().toList() and stream().sorted() preallocate. See
         // Stream::SizeHint.
-        return Stream<T>(typename Stream<T>::NextFn(
-            [iter = this->constIterator()]() mutable -> std::optional<T> {
+        const auto size = static_cast<std::size_t>(this->size());
+        return Stream<T>(
+            typename Stream<T>::NextFn([iter = this->constIterator()] mutable -> std::optional<T> {
                 if (!iter->hasNext()) {
                     return std::nullopt;
                 }
                 return std::optional<T>(std::in_place, iter->next());
-            }), static_cast<std::size_t>(this->size()));
+            }),
+            size, size);
+    }
+
+    /// Java: Collection.parallelStream(). The same source as stream(), with the
+    /// parallel flag raised: the size becomes the pull budget, so the element-wise
+    /// stages built from it batch instead of running one element at a time.
+    [[nodiscard]] Stream<T> parallelStream() const override {
+        return std::move(this->stream()).parallel();
     }
 
     [[nodiscard]] bool equals(const Collection<T>& other) const override {
@@ -148,7 +157,7 @@ public:
     [[nodiscard]] std::size_t hashCode() const override {
         std::size_t result = 1;
         for (const T& candidate : *this) {
-            result = 31 * result + elementHash(candidate);
+            result = (31 * result) + elementHash(candidate);
         }
         return result;
     }

@@ -1,7 +1,12 @@
 ---
 Language: Cpp
 BasedOnStyle: Google
-Standard: c++23
+# clang-format has no `c++23` token: its Standard enum stops at `c++20`, so
+# `Standard: c++23` makes the whole file unparseable ("unknown enumerated
+# scalar") in the clang-format that ships with CLion, and the IDE then silently
+# falls back to the default style. `Latest` means "the newest standard this
+# build understands", which is the forward-compatible way to say C++23.
+Standard: Latest
 ColumnLimit: 100
 IndentWidth: 4
 AccessModifierOffset: -4

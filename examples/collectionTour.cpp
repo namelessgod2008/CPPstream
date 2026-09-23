@@ -156,8 +156,10 @@ int main()
     std::cout << '\n';
 
     std::cout << "scan (rolling total):";
-    for (const int running : cppstream::Stream<int>::of(data).gather(cppstream::Gatherers::scan<int, int>(
-             int{0}, [](int total, const int& value) { return total + value; })).toList()) {
+    for (const int running : cppstream::Stream<int>::of(data)
+                                 .gather(cppstream::Gatherers::scan<int, int>(
+                                     0, [](int total, const int& value) { return total + value; }))
+                                 .toList()) {
         std::cout << ' ' << running;
     }
     std::cout << '\n';
@@ -178,7 +180,7 @@ int main()
     std::cout << "fold (one element out): "
               << cppstream::Stream<int>::of(data)
                      .gather(cppstream::Gatherers::fold<int, int>(
-                         int{0}, [](int total, const int& value) { return total + value; }))
+                         0, [](int total, const int& value) { return total + value; }))
                      .findFirst()
                      .get()
               << '\n';

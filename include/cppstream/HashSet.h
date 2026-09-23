@@ -117,7 +117,7 @@ public:
 
     private:
         const HashSet* owner_;
-        typename Buckets::const_iterator current_;
+        Buckets::const_iterator current_;
         int expectedModCount_;
     };
 
@@ -159,8 +159,8 @@ public:
 
     private:
         HashSet* owner_;
-        typename Buckets::iterator current_;
-        typename Buckets::iterator last_;
+        Buckets::iterator current_;
+        Buckets::iterator last_;
         bool hasLast_ = false;
         int expectedModCount_;
     };

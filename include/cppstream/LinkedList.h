@@ -75,7 +75,7 @@ public:
     /// Java: List.get(index). O(n), as Java documents for LinkedList.
     T& get(int index) override { return *nodeAt(checkedIndex(index)); }
 
-    const T& get(int index) const override { return *nodeAt(checkedIndex(index)); }
+    [[nodiscard]] const T& get(int index) const override { return *nodeAt(checkedIndex(index)); }
 
     T set(int index, const T& element) override {
         this->checkNotFrozen();
@@ -288,7 +288,7 @@ public:
 
     private:
         const LinkedList* owner_;
-        typename Nodes::const_iterator current_;
+        Nodes::const_iterator current_;
         int expectedModCount_;
     };
 
@@ -400,20 +400,18 @@ public:
         }
 
         LinkedList* owner_;
-        typename Nodes::iterator current_;
+        Nodes::iterator current_;
         int index_ = 0;
-        typename Nodes::iterator lastReturned_;
+        Nodes::iterator lastReturned_;
         int lastIndex_ = 0;
         bool hasLast_ = false;
         int expectedModCount_;
     };
 
 private:
-    [[nodiscard]] typename Nodes::iterator nodeAt(int index) {
-        return std::next(nodes_.begin(), index);
-    }
+    [[nodiscard]] Nodes::iterator nodeAt(int index) { return std::next(nodes_.begin(), index); }
 
-    [[nodiscard]] typename Nodes::const_iterator nodeAt(int index) const {
+    [[nodiscard]] Nodes::const_iterator nodeAt(int index) const {
         return std::next(nodes_.begin(), index);
     }
 

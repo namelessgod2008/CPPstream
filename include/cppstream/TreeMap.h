@@ -50,7 +50,7 @@ public:
     using keyType = K;
     using valueType = V;
     using Entries = std::map<K, V, Compare>;
-    using Entry = typename Map<K, V>::Entry;
+    using Entry = Map<K, V>::Entry;
 
     TreeMap() = default;
 
@@ -433,8 +433,8 @@ class TreeMapRangeView final : public Map<K, V> {
 public:
     using keyType = K;
     using valueType = V;
-    using Entries = typename TreeMap<K, V, Compare>::Entries;
-    using Entry = typename Map<K, V>::Entry;
+    using Entries = TreeMap<K, V, Compare>::Entries;
+    using Entry = Map<K, V>::Entry;
 
     /// A modifiable view, built by the non-const overloads of subMap/headMap/
     /// tailMap/descendingMap. The fences are always the *ascending* pair; only the
@@ -1120,19 +1120,15 @@ private:
         return toInclusive_ ? entries.upper_bound(*to_) : entries.lower_bound(*to_);
     }
 
-    [[nodiscard]] typename Entries::const_iterator firstInRange() const {
-        return firstInRangeOf(*backing_);
-    }
+    [[nodiscard]] Entries::const_iterator firstInRange() const { return firstInRangeOf(*backing_); }
 
-    [[nodiscard]] typename Entries::const_iterator pastLastInRange() const {
+    [[nodiscard]] Entries::const_iterator pastLastInRange() const {
         return pastLastInRangeOf(*backing_);
     }
 
-    [[nodiscard]] typename Entries::iterator firstInRangeForWrite() {
-        return firstInRangeOf(writable());
-    }
+    [[nodiscard]] Entries::iterator firstInRangeForWrite() { return firstInRangeOf(writable()); }
 
-    [[nodiscard]] typename Entries::iterator pastLastInRangeForWrite() {
+    [[nodiscard]] Entries::iterator pastLastInRangeForWrite() {
         return pastLastInRangeOf(writable());
     }
 
@@ -1175,7 +1171,7 @@ class TreeMapKeySetView final : public AbstractSet<K> {
 public:
     using keyType = K;
     using valueType = V;
-    using Entry = typename Map<K, V>::Entry;
+    using Entry = Map<K, V>::Entry;
 
     /// Built by TreeMap::navigableKeySet()/descendingKeySet() and by the same two
     /// methods on a range view. The window is a handle -- a root pointer plus

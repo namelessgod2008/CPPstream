@@ -132,7 +132,7 @@ TEST_CASE("map views can be read through a const map and through range-for")
     for (const std::string& key : readOnly.keySet()) {
         seenKeys.push_back(key);
     }
-    std::sort(seenKeys.begin(), seenKeys.end());
+    std::ranges::sort(seenKeys);
     CHECK(seenKeys == std::vector<std::string>({"ada", "alan"}));
 
     std::size_t seenEntries = 0;

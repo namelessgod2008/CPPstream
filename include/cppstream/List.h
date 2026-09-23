@@ -61,7 +61,7 @@ public:
     /// Deliberately not [[nodiscard]]: `get` hands out a reference and mutating
     /// through it is a normal use, so discarding the result is not a mistake.
     virtual T& get(int index) = 0;
-    virtual const T& get(int index) const = 0;
+    [[nodiscard]] virtual const T& get(int index) const = 0;
 
     /// Java: List.set(index, element). Returns the element it replaced.
     virtual T set(int index, const T& element) = 0;
@@ -155,7 +155,9 @@ public:
 
     T& get(int index) override { return writable().get(offset_ + checkedIndex(index)); }
 
-    const T& get(int index) const override { return backing_->get(offset_ + checkedIndex(index)); }
+    [[nodiscard]] const T& get(int index) const override {
+        return backing_->get(offset_ + checkedIndex(index));
+    }
 
     T set(int index, const T& element) override {
         this->checkNotFrozen();

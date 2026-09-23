@@ -58,7 +58,7 @@ public:
     template <class T>
     static Collector<T, ArrayList<T>, ArrayList<T>> toList() {
         return Collector<T, ArrayList<T>, ArrayList<T>>(
-            []() { return ArrayList<T>(); },
+            [] { return ArrayList<T>(); },
             [](ArrayList<T>& accumulator, T& element) { accumulator.add(std::move(element)); },
             [](ArrayList<T>&& left, ArrayList<T>&& right) {
                 left.addAll(right);
@@ -72,7 +72,7 @@ public:
     template <class T>
     static Collector<T, ArrayList<T>, ArrayList<T>> toUnmodifiableList() {
         return Collector<T, ArrayList<T>, ArrayList<T>>(
-            []() { return ArrayList<T>(); },
+            [] { return ArrayList<T>(); },
             [](ArrayList<T>& accumulator, T& element) { accumulator.add(std::move(element)); },
             [](ArrayList<T>&& left, ArrayList<T>&& right) {
                 left.addAll(right);
@@ -88,7 +88,7 @@ public:
     template <class T>
     static Collector<T, HashSet<T>, HashSet<T>> toSet() {
         return Collector<T, HashSet<T>, HashSet<T>>(
-            []() { return HashSet<T>(); },
+            [] { return HashSet<T>(); },
             [](HashSet<T>& accumulator, T& element) { accumulator.add(std::move(element)); },
             [](HashSet<T>&& left, HashSet<T>&& right) {
                 left.addAll(right);
@@ -102,7 +102,7 @@ public:
     template <class T>
     static Collector<T, HashSet<T>, HashSet<T>> toUnmodifiableSet() {
         return Collector<T, HashSet<T>, HashSet<T>>(
-            []() { return HashSet<T>(); },
+            [] { return HashSet<T>(); },
             [](HashSet<T>& accumulator, T& element) { accumulator.add(std::move(element)); },
             [](HashSet<T>&& left, HashSet<T>&& right) {
                 left.addAll(right);
@@ -119,7 +119,7 @@ public:
     template <class T, class KF, class VF, class K = MapKeyOf<T, KF>, class U = MapValueOf<T, VF>>
     static Collector<T, HashMap<K, U>, HashMap<K, U>> toMap(KF keyMapper, VF valueMapper) {
         return Collector<T, HashMap<K, U>, HashMap<K, U>>(
-            []() { return HashMap<K, U>(); },
+            [] { return HashMap<K, U>(); },
             [keyMapper, valueMapper](HashMap<K, U>& accumulator, T& element) {
                 K key = std::invoke(keyMapper, element);
                 if (accumulator.containsKey(key)) {
@@ -141,7 +141,7 @@ public:
     static Collector<T, HashMap<K, U>, HashMap<K, U>> toMap(
         KF keyMapper, VF valueMapper, MF mergeFunction) {
         return Collector<T, HashMap<K, U>, HashMap<K, U>>(
-            []() { return HashMap<K, U>(); },
+            [] { return HashMap<K, U>(); },
             [keyMapper, valueMapper, mergeFunction](HashMap<K, U>& accumulator, T& element) {
                 K key = std::invoke(keyMapper, element);
                 U value = std::invoke(valueMapper, element);
@@ -164,7 +164,7 @@ public:
     template <class T, class KF, class VF, class K = MapKeyOf<T, KF>, class U = MapValueOf<T, VF>>
     static Collector<T, HashMap<K, U>, HashMap<K, U>> toUnmodifiableMap(KF keyMapper, VF valueMapper) {
         return Collector<T, HashMap<K, U>, HashMap<K, U>>(
-            []() { return HashMap<K, U>(); },
+            [] { return HashMap<K, U>(); },
             [keyMapper, valueMapper](HashMap<K, U>& accumulator, T& element) {
                 K key = std::invoke(keyMapper, element);
                 if (accumulator.containsKey(key)) {
@@ -191,7 +191,7 @@ public:
     template <class T>
     static Collector<T, std::string, std::string> joining() {
         return Collector<T, std::string, std::string>(
-            []() { return std::string(); },
+            [] { return std::string(); },
             [](std::string& accumulator, T& element) { accumulator += element; },
             [](std::string&& left, std::string&& right) {
                 left += right;
@@ -216,7 +216,7 @@ public:
     static Collector<T, std::string, std::string> joining(
         const std::string& delimiter, const std::string& prefix, const std::string& suffix) {
         return Collector<T, std::string, std::string>(
-            []() { return std::string(); },
+            [] { return std::string(); },
             [delimiter](std::string& accumulator, T& element) {
                 accumulator += delimiter;
                 accumulator += element;
@@ -242,7 +242,7 @@ public:
     template <class T>
     static Collector<T, std::int64_t, std::int64_t> counting() {
         return Collector<T, std::int64_t, std::int64_t>(
-            []() { return std::int64_t{0}; },
+            [] { return std::int64_t{0}; },
             [](std::int64_t& accumulator, T& /*element*/) { ++accumulator; },
             [](std::int64_t&& left, std::int64_t&& right) { return left + right; },
             [](std::int64_t&& accumulator) { return accumulator; },
@@ -255,7 +255,7 @@ public:
     template <class T, class F>
     static Collector<T, std::int64_t, int> summingInt(F mapper) {
         return Collector<T, std::int64_t, int>(
-            []() { return std::int64_t{0}; },
+            [] { return std::int64_t{0}; },
             [mapper](std::int64_t& accumulator, T& element) {
                 accumulator += static_cast<std::int64_t>(std::invoke(mapper, element));
             },
@@ -267,7 +267,7 @@ public:
     template <class T, class F>
     static Collector<T, std::int64_t, std::int64_t> summingLong(F mapper) {
         return Collector<T, std::int64_t, std::int64_t>(
-            []() { return std::int64_t{0}; },
+            [] { return std::int64_t{0}; },
             [mapper](std::int64_t& accumulator, T& element) {
                 accumulator += static_cast<std::int64_t>(std::invoke(mapper, element));
             },
@@ -280,26 +280,28 @@ public:
     template <class T, class F>
     static Collector<T, double, double> summingDouble(F mapper) {
         return Collector<T, double, double>(
-            []() { return 0.0; },
+            [] { return 0.0; },
             [mapper](double& accumulator, T& element) {
                 accumulator += static_cast<double>(std::invoke(mapper, element));
             },
             [](double&& left, double&& right) { return left + right; },
-            [](double&& accumulator) { return accumulator; },
-            {Characteristics::identityFinish});
+            [](double&& accumulator) { return accumulator; }, {Characteristics::identityFinish});
     }
 
     /// Java: Collectors.averagingInt(mapper). An empty stream yields 0.0, not NaN.
     template <class T, class F>
     static Collector<T, AveragingState, double> averagingInt(F mapper) {
         return Collector<T, AveragingState, double>(
-            []() { return AveragingState(); },
+            [] { return AveragingState(); },
             [mapper](AveragingState& accumulator, T& element) {
                 accumulator.sum += static_cast<double>(std::invoke(mapper, element));
                 ++accumulator.count;
             },
             [](AveragingState&& left, AveragingState&& right) {
-                return AveragingState{left.sum + right.sum, left.count + right.count};
+                return AveragingState{
+                    .sum = left.sum + right.sum,
+                    .count = left.count + right.count,
+                };
             },
             [](AveragingState&& accumulator) {
                 return accumulator.count == 0
@@ -312,13 +314,16 @@ public:
     template <class T, class F>
     static Collector<T, AveragingState, double> averagingLong(F mapper) {
         return Collector<T, AveragingState, double>(
-            []() { return AveragingState(); },
+            [] { return AveragingState(); },
             [mapper](AveragingState& accumulator, T& element) {
                 accumulator.sum += static_cast<double>(std::invoke(mapper, element));
                 ++accumulator.count;
             },
             [](AveragingState&& left, AveragingState&& right) {
-                return AveragingState{left.sum + right.sum, left.count + right.count};
+                return AveragingState{
+                    .sum = left.sum + right.sum,
+                    .count = left.count + right.count,
+                };
             },
             [](AveragingState&& accumulator) {
                 return accumulator.count == 0
@@ -340,9 +345,9 @@ public:
     /// Java: Collectors.minBy(comparator). Ties keep the earlier element, as
     /// Java's `compare(a, b) <= 0 ? a : b` does.
     template <class T>
-    static Collector<T, Optional<T>, Optional<T>> minBy(Comparator<T> comparator) {
+    static Collector<T, Optional<T>, Optional<T>> minBy(const Comparator<T>& comparator) {
         return Collector<T, Optional<T>, Optional<T>>(
-            []() { return Optional<T>::empty(); },
+            [] { return Optional<T>::empty(); },
             [comparator](Optional<T>& accumulator, T& element) {
                 if (accumulator.isEmpty() || comparator.compare(accumulator.get(), element) > 0) {
                     accumulator = Optional<T>::of(element);
@@ -363,9 +368,9 @@ public:
 
     /// Java: Collectors.maxBy(comparator).
     template <class T>
-    static Collector<T, Optional<T>, Optional<T>> maxBy(Comparator<T> comparator) {
+    static Collector<T, Optional<T>, Optional<T>> maxBy(const Comparator<T>& comparator) {
         return Collector<T, Optional<T>, Optional<T>>(
-            []() { return Optional<T>::empty(); },
+            [] { return Optional<T>::empty(); },
             [comparator](Optional<T>& accumulator, T& element) {
                 if (accumulator.isEmpty() || comparator.compare(accumulator.get(), element) < 0) {
                     accumulator = Optional<T>::of(element);
@@ -388,7 +393,7 @@ public:
     template <class T, class F>
     static Collector<T, T, T> reducing(T identity, F reducer) {
         return Collector<T, T, T>(
-            [identity]() { return identity; },
+            [identity] { return identity; },
             [reducer](T& accumulator, T& element) {
                 accumulator = std::invoke(reducer, std::move(accumulator), element);
             },
@@ -403,7 +408,7 @@ public:
     template <class T, class F>
     static Collector<T, Optional<T>, Optional<T>> reducing(F reducer) {
         return Collector<T, Optional<T>, Optional<T>>(
-            []() { return Optional<T>::empty(); },
+            [] { return Optional<T>::empty(); },
             [reducer](Optional<T>& accumulator, T& element) {
                 if (accumulator.isEmpty()) {
                     accumulator = Optional<T>::of(element);
@@ -429,7 +434,7 @@ public:
     template <class T, class U, class MF, class F>
     static Collector<T, U, U> reducing(U identity, MF mapper, F reducer) {
         return Collector<T, U, U>(
-            [identity]() { return identity; },
+            [identity] { return identity; },
             [mapper, reducer](U& accumulator, T& element) {
                 accumulator = std::invoke(reducer, std::move(accumulator), std::invoke(mapper, element));
             },
@@ -447,8 +452,8 @@ public:
     /// Java: Collectors.mapping(mapper, downstream).
     template <class T, class F, class D>
     static Collector<T, typename D::accumulatorType, typename D::resultType> mapping(
-        F mapper, D downstream) {
-        using A = typename D::accumulatorType;
+        F mapper, const D& downstream) {
+        using A = D::accumulatorType;
         return Collector<T, A, typename D::resultType>(downstream.supplier(),
             [mapper, downstream](A& accumulator, T& element) {
                 auto mapped = std::invoke(mapper, element);
@@ -460,8 +465,8 @@ public:
     /// Java 9: Collectors.filtering(predicate, downstream).
     template <class T, class P, class D>
     static Collector<T, typename D::accumulatorType, typename D::resultType> filtering(
-        P predicate, D downstream) {
-        using A = typename D::accumulatorType;
+        P predicate, const D& downstream) {
+        using A = D::accumulatorType;
         return Collector<T, A, typename D::resultType>(downstream.supplier(),
             [predicate, downstream](A& accumulator, T& element) {
                 if (std::invoke(predicate, element)) {
@@ -477,7 +482,7 @@ public:
     template <class T, class F, class D>
     static Collector<T, typename D::accumulatorType, typename D::resultType> flatMapping(
         F mapper, D downstream) {
-        using A = typename D::accumulatorType;
+        using A = D::accumulatorType;
         return Collector<T, A, typename D::resultType>(downstream.supplier(),
             [mapper, downstream](A& accumulator, T& element) {
                 std::invoke(mapper, element).forEach([&accumulator, &downstream](auto& mapped) {
@@ -490,15 +495,16 @@ public:
     /// Java 12: Collectors.teeing(first, second, merger).
     template <class T, class D1, class D2, class M>
     static Collector<T, std::pair<typename D1::accumulatorType, typename D2::accumulatorType>,
-        std::remove_cvref_t<std::invoke_result_t<M&, typename D1::resultType, typename D2::resultType>>>
-    teeing(D1 first, D2 second, M merger) {
-        using A1 = typename D1::accumulatorType;
-        using A2 = typename D2::accumulatorType;
+                     std::remove_cvref_t<std::invoke_result_t<M&, typename D1::resultType,
+                                                              typename D2::resultType>>>
+    teeing(const D1& first, const D2& second, M merger) {
+        using A1 = D1::accumulatorType;
+        using A2 = D2::accumulatorType;
         using State = std::pair<A1, A2>;
         using R = std::remove_cvref_t<std::invoke_result_t<M&, typename D1::resultType,
             typename D2::resultType>>;
         return Collector<T, State, R>(
-            [first, second]() {
+            [first, second] {
                 return State(std::invoke(first.supplier()), std::invoke(second.supplier()));
             },
             [first, second](State& state, T& element) {
@@ -535,13 +541,13 @@ public:
     /// runs the downstream finisher once per group.
     template <class T, class F, class D, class K = MapKeyOf<T, F>>
     static Collector<T, std::unordered_map<K, typename D::accumulatorType>,
-        HashMap<K, typename D::resultType>>
-    groupingBy(F classifier, D downstream) {
-        using A = typename D::accumulatorType;
-        using R = typename D::resultType;
+                     HashMap<K, typename D::resultType>>
+    groupingBy(F classifier, const D& downstream) {
+        using A = D::accumulatorType;
+        using R = D::resultType;
         using Accumulator = std::unordered_map<K, A>;
         return Collector<T, Accumulator, HashMap<K, R>>(
-            []() { return Accumulator(); },
+            [] { return Accumulator(); },
             [classifier, downstream](Accumulator& accumulator, T& element) {
                 K key = std::invoke(classifier, element);
                 auto position = accumulator.find(key);
@@ -587,13 +593,13 @@ public:
     /// when a partition is empty. The finisher below preserves that.
     template <class T, class P, class D>
     static Collector<T, std::unordered_map<bool, typename D::accumulatorType>,
-        HashMap<bool, typename D::resultType>>
-    partitioningBy(P predicate, D downstream) {
-        using A = typename D::accumulatorType;
-        using R = typename D::resultType;
+                     HashMap<bool, typename D::resultType>>
+    partitioningBy(P predicate, const D& downstream) {
+        using A = D::accumulatorType;
+        using R = D::resultType;
         using Accumulator = std::unordered_map<bool, A>;
         return Collector<T, Accumulator, HashMap<bool, R>>(
-            []() { return Accumulator(); },
+            [] { return Accumulator(); },
             [predicate, downstream](Accumulator& accumulator, T& element) {
                 const bool key = std::invoke(predicate, element);
                 auto position = accumulator.find(key);
@@ -665,8 +671,10 @@ private:
     template <class T, class Statistics, class Accept>
     static Collector<T, Statistics, Statistics> summarizing(Accept accept) {
         return Collector<T, Statistics, Statistics>(
-            []() { return Statistics(); },
-            [accept](Statistics& accumulator, T& element) { std::invoke(accept, accumulator, element); },
+            [] { return Statistics(); },
+            [accept](Statistics& accumulator, T& element) {
+                std::invoke(accept, accumulator, element);
+            },
             [](Statistics&& left, Statistics&& right) {
                 left.combine(right);
                 return std::move(left);

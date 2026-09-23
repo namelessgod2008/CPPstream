@@ -54,7 +54,7 @@ TEST_CASE("Set equality ignores order where List equality does not")
     CHECK_FALSE(left.equals(asList));
 
     // Java's AbstractSet.hashCode is the plain sum, not the ordered 31* fold.
-    CHECK(left.hashCode() == 6u);
+    CHECK(left.hashCode() == 6U);
 
     const cppstream::HashSet<int> smaller{1, 2};
     CHECK_FALSE(left.equals(smaller));
@@ -174,7 +174,7 @@ TEST_CASE("TreeSet accepts a custom comparator")
 {
     // Reverse order, supplied as a std::set-style comparer rather than a
     // cppstream::Comparator: the strategy parameter lives on the concrete class.
-    cppstream::TreeSet<int, std::greater<int>> descending{1, 3, 2};
+    cppstream::TreeSet<int, std::greater<>> descending{1, 3, 2};
     CHECK(descending.toSortedVector() == std::vector<int>{3, 2, 1});
     CHECK(descending.first() == 3);
 }
@@ -310,7 +310,7 @@ TEST_CASE("HashSet accepts a custom hash strategy")
     };
     struct PointHash {
         std::size_t operator()(const Point& point) const noexcept {
-            return static_cast<std::size_t>(point.x) * 31u + static_cast<std::size_t>(point.y);
+            return (static_cast<std::size_t>(point.x) * 31U) + static_cast<std::size_t>(point.y);
         }
     };
     struct PointEqual {

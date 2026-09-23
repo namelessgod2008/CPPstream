@@ -18,8 +18,10 @@ namespace cppstream {
 /// List.of became Lists::of (divergence 6).
 ///
 /// Missing: mapConcurrent, which is defined entirely in terms of a virtual
-/// thread per element and has no meaning without one. Parallel streams are out of
-/// scope (divergence 8), and a sequential mapConcurrent is just Stream::map.
+/// thread per element and has no meaning without one. The parallel streams this
+/// library does have are not a substitute: their unit of work is a batch of one
+/// stage, not a thread per element, and a sequential mapConcurrent is just
+/// Stream::map (see DESIGN.md divergence 8).
 class Gatherers {
 public:
 

@@ -53,8 +53,10 @@ private:
 /// Three differences from Java, all forced by the language or by scope:
 ///
 ///   * No `combiner`. In Java it exists solely to merge partial states across a
-///     parallel stream; parallel streams are out of scope here (divergence 8), so
-///     it would be a required parameter that is never called.
+///     parallel stream. gather() is a barrier in a parallel pipeline -- a gatherer
+///     may emit any number of elements per input, so a batch cannot be processed
+///     until it has been materialised -- which means it would be a required
+///     parameter that is never called. See DESIGN.md divergence 8.
 ///   * No `andThen`. In a sequential pipeline `s.gather(a.andThen(b))` and
 ///     `s.gather(a).gather(b)` are the same thing -- the second gatherer's input
 ///     is the first's output, and both finishers run in the same order -- so the

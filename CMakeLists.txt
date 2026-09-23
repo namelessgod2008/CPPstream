@@ -41,6 +41,12 @@ option(CPPSTREAM_BUILD_EXAMPLES     "Build the example programs"  ${CPPSTREAM_IS
 
 # Header-only INTERFACE target: the library is almost entirely templates, so a
 # static library would only add explicit instantiation boilerplate.
+#
+# Threads is a real dependency even though the library ships no binary: parallel
+# streams own a shared worker pool, and on a platform where std::thread is not in
+# the default runtime that needs -pthread on the consumer's link line.
+find_package(Threads REQUIRED)
+
 add_library(cppstream INTERFACE)
 add_library(cppstream::cppstream ALIAS cppstream)
 
@@ -49,6 +55,8 @@ target_include_directories(cppstream INTERFACE
     $<INSTALL_INTERFACE:include>)
 
 target_compile_features(cppstream INTERFACE cxx_std_23)
+
+target_link_libraries(cppstream INTERFACE Threads::Threads)
 
 # Warnings live on a separate INTERFACE target so they reach our tests and
 # examples but are never forced onto consumers of the library.

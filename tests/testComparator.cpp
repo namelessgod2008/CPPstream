@@ -62,7 +62,7 @@ TEST_CASE("operator() makes a Comparator usable as a strict weak ordering")
     const auto comparator = cppstream::Comparator<int>::naturalOrder();
 
     std::vector<int> values{3, 1, 4, 1, 5, 9, 2, 6};
-    std::sort(values.begin(), values.end(), comparator);
+    std::ranges::sort(values, comparator);
 
     const std::vector<int> expected{1, 1, 2, 3, 4, 5, 6, 9};
     REQUIRE(values.size() == expected.size());
@@ -74,8 +74,8 @@ TEST_CASE("comparing extracts a key and orders by its natural ordering")
     const auto byName = cppstream::Comparator<Person>::comparing(
         [](const Person& person) { return person.name; });
 
-    const Person alice{"alice", 30};
-    const Person bob{"bob", 25};
+    const Person alice{.name = "alice", .age = 30};
+    const Person bob{.name = "bob", .age = 25};
 
     CHECK(byName.compare(alice, bob) < 0);
     CHECK(byName.compare(bob, alice) > 0);
@@ -99,9 +99,9 @@ TEST_CASE("thenComparing only consults the tie-breaker when keys are equal")
     const auto byNameThenAge = byName.thenComparing(
         [](const Person& person) { return person.age; });
 
-    const Person alice30{"alice", 30};
-    const Person alice40{"alice", 40};
-    const Person bob25{"bob", 25};
+    const Person alice30{.name = "alice", .age = 30};
+    const Person alice40{.name = "alice", .age = 40};
+    const Person bob25{.name = "bob", .age = 25};
 
     CHECK(byNameThenAge.compare(alice30, alice40) < 0);
     CHECK(byNameThenAge.compare(alice40, alice30) > 0);

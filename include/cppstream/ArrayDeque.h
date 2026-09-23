@@ -246,7 +246,7 @@ public:
 
     private:
         const ArrayDeque* owner_;
-        typename Nodes::const_iterator current_;
+        Nodes::const_iterator current_;
         int expectedModCount_;
     };
 
@@ -287,8 +287,8 @@ public:
 
     private:
         ArrayDeque* owner_;
-        typename Nodes::iterator current_;
-        typename Nodes::iterator last_;
+        Nodes::iterator current_;
+        Nodes::iterator last_;
         bool hasLast_ = false;
         int expectedModCount_;
     };
@@ -320,8 +320,7 @@ public:
             // the erase, so the reverse cursor is rebuilt from the successor of
             // the removed element. make_reverse_iterator(successor) points back at
             // the element *before* the removed one, which is the next one to visit.
-            const typename Nodes::iterator successor =
-                owner_->nodes_.erase(std::prev(last_.base()));
+            const auto successor = owner_->nodes_.erase(std::prev(last_.base()));
             current_ = typename Nodes::reverse_iterator(successor);
             ++owner_->modCount_;
             expectedModCount_ = owner_->modCount_;
@@ -330,8 +329,8 @@ public:
 
     private:
         ArrayDeque* owner_;
-        typename Nodes::reverse_iterator current_;
-        typename Nodes::reverse_iterator last_;
+        Nodes::reverse_iterator current_;
+        Nodes::reverse_iterator last_;
         bool hasLast_ = false;
         int expectedModCount_;
     };

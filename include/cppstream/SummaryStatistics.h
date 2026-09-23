@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <cstdint>
 #include <limits>
 #include <string>
@@ -21,24 +22,16 @@ public:
     void accept(int value) noexcept {
         ++count_;
         sum_ += value;
-        if (value < min_) {
-            min_ = value;
-        }
-        if (value > max_) {
-            max_ = value;
-        }
+        min_ = std::min(value, min_);
+        max_ = std::max(value, max_);
     }
 
     /// Java: IntSummaryStatistics.combine(other).
     void combine(const IntSummaryStatistics& other) noexcept {
         count_ += other.count_;
         sum_ += other.sum_;
-        if (other.min_ < min_) {
-            min_ = other.min_;
-        }
-        if (other.max_ > max_) {
-            max_ = other.max_;
-        }
+        min_ = std::min(other.min_, min_);
+        max_ = std::max(other.max_, max_);
     }
 
     [[nodiscard]] std::int64_t getCount() const noexcept { return count_; }
@@ -70,23 +63,15 @@ public:
     void accept(std::int64_t value) noexcept {
         ++count_;
         sum_ += value;
-        if (value < min_) {
-            min_ = value;
-        }
-        if (value > max_) {
-            max_ = value;
-        }
+        min_ = std::min(value, min_);
+        max_ = std::max(value, max_);
     }
 
     void combine(const LongSummaryStatistics& other) noexcept {
         count_ += other.count_;
         sum_ += other.sum_;
-        if (other.min_ < min_) {
-            min_ = other.min_;
-        }
-        if (other.max_ > max_) {
-            max_ = other.max_;
-        }
+        min_ = std::min(other.min_, min_);
+        max_ = std::max(other.max_, max_);
     }
 
     [[nodiscard]] std::int64_t getCount() const noexcept { return count_; }
@@ -113,6 +98,12 @@ private:
 
 /// A port of java.util.DoubleSummaryStatistics.
 ///
+/// Unlike the integral variants above, min and max are compared with plain `<` and
+/// `>` rather than std::min/std::max: Java's DoubleSummaryStatistics.accept only
+/// tracks a value when `value < min` / `value > max`, so a NaN never becomes the
+/// minimum or the maximum (it only poisons the sum). std::min/std::max return the
+/// NaN instead, which would diverge from the API being mirrored.
+///
 /// Java's version uses Kahan compensated summation internally and lets getSum()
 /// disagree slightly with the naive sum. This keeps the naive sum: correctness of
 /// the API matters more here than the last bit of the mantissa, and pretending to
@@ -122,9 +113,11 @@ public:
     void accept(double value) noexcept {
         ++count_;
         sum_ += value;
+        // NOLINTNEXTLINE(readability-use-std-min-max): a NaN must not win, see above.
         if (value < min_) {
             min_ = value;
         }
+        // NOLINTNEXTLINE(readability-use-std-min-max): a NaN must not win, see above.
         if (value > max_) {
             max_ = value;
         }
@@ -133,9 +126,11 @@ public:
     void combine(const DoubleSummaryStatistics& other) noexcept {
         count_ += other.count_;
         sum_ += other.sum_;
+        // NOLINTNEXTLINE(readability-use-std-min-max): a NaN must not win, see above.
         if (other.min_ < min_) {
             min_ = other.min_;
         }
+        // NOLINTNEXTLINE(readability-use-std-min-max): a NaN must not win, see above.
         if (other.max_ > max_) {
             max_ = other.max_;
         }

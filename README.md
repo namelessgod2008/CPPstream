@@ -8,11 +8,15 @@ C++23 复刻 Java 的 `java.util.stream` API 与 `java.util.Collection` 体系�
 
 ## 状态
 
-`M0`–`M10` 全部完成：**223 个测试用例 / 1402 条断言**，在 Debug、`-Werror`、ASan+UBSan
+`M0`–`M11` 全部完成：**242 个测试用例 / 1491 条断言**，在 Debug、`-Werror`、ASan+UBSan
 三种配置下全部通过，另有 5 个编译失败用例接入 CTest。库在 `-fno-rtti` 下同样可以构建。
 
 - `Stream<T>` —— 14 个中间操作、16 个终结操作、12 个静态工厂。拉取式、惰性、单次消费
   （编译期与运行期双重防护），并带 `gather()`、`mapMulti()`、`ofRange()` 与 `sizeHint()` 快路径。
+- **并行流**：`parallel()` / `parallelStream()` 是真的，阶段按批上共享线程池。结果与顺序版
+  逐字节一致（遭遇顺序保留），`collect` / `reduce` / `min` / `max` / `sum` 走"分片累加 +
+  按序 `combiner` 合并"，三种 `match` 保持短路。执行模型与 Java 不同，差别见
+  DESIGN.md 第 8 条与 §7.10。
 - `Collector<T, A, R>` 与全套 `Collectors`，以及 `Gatherer<T, A, R>` 与 `Gatherers`
   （`windowFixed`、`windowSliding`、`fold`、`scan`）。
 - 容器体系：`Iterable` / `Collection` / `List` / `Set` / `Queue` / `Deque` / `Map`，
@@ -34,10 +38,16 @@ C++23 复刻 Java 的 `java.util.stream` API 与 `java.util.Collection` 体系�
   断言落在 `tests/testRangeViews.cpp`、`tests/testSet.cpp`、`tests/testMap.cpp` 与
   `tests/testDescendingViews.cpp`。递减这部分另外做了对拍：本库与 JDK 各生成一份 777 行的
   集合转录和 606 行的映射转录，两份都逐字节相同。
-- `Lists` / `Sets` / `Maps` 工厂，以及三个可运行的示例。
+- `Lists` / `Sets` / `Maps` 工厂，以及四个可运行的示例。
 
-刻意仍然缺席、并如实记录的只有**并行流**：`parallel()` 按要求只声明、调用即抛；
-`mapConcurrent` 跟着一起缺席，因为离开虚拟线程它就没有意义。
+并行流的执行模型是本库自己的，因为**拉取式管道里的源根本不可切分**（阶段只是"给我下一个
+元素"的闭包，没有 `Spliterator.trySplit()` 那种信息），所以没有照抄 ForkJoinPool 那条路：
+`parallel()` **之后的阶段**按批丢到共享池上并行求值，再按原顺序吐回；批次大小由一个"拉取
+预算"界定，无界的源（`iterate` / `generate`）因此自动退化为顺序执行而不会预读挂死。三条
+需要记住的差别都记在 DESIGN.md §7.10：标志只作用于调用点之后、批处理有有界的预读
+（`peek` / `forEach` 的动作不再按顺序完成）、无界源不并行。
+
+仍然缺席、并如实记录的只有 `mapConcurrent`：离开虚拟线程它就是一个 `map`。
 
 ### 快速浏览
 
@@ -90,6 +100,26 @@ const auto repeated = cppstream::Stream<int>::of(1, 2, 3)
 const std::vector<int> raw{5, 3, 1};
 const auto sorted = cppstream::Stream<int>::ofRange(raw).sorted().toList();
 
+// parallel() 之后的阶段按批上共享线程池，结果与顺序版逐字节一致。
+const auto parallelSum = cppstream::Stream<std::int64_t>::range(0, 1'000'000)
+                             .parallel()
+                             .map([](std::int64_t value) { return value * value; })
+                             .sum();
+
+// 容器上的 parallelStream() 是惯用入口：标志得在重活之前设好，
+// 所以 collection.parallelStream().map(f) 里的 f 才会并行。
+cppstream::ArrayList<std::string> names{"carol", "alice", "bob"};
+const auto roster = names.parallelStream().collect(
+    cppstream::Collectors::joining<std::string>(", "));
+
+// 无界的源没有可界定的预读范围，于是自动退化为顺序执行 ——
+// 这一句能返回，靠的就是这个。
+const auto firstMultipleOfSevenParallel =
+    cppstream::Stream<std::int64_t>::iterate(1, [](std::int64_t value) { return value + 1; })
+        .parallel()
+        .filter([](std::int64_t value) { return value % 7 == 0; })
+        .findFirst();
+
 // subSet 是同一棵树上的窗口：写进去会落到树上，窗口外的值会被拒绝。
 cppstream::TreeSet<int> points{10, 20, 30, 40, 50};
 auto middle = points.subSet(20, 40);     // [20, 40)
@@ -110,15 +140,19 @@ auto stockKeys = descendingStock.navigableKeySet();  // "pears", "apples"
 const bool soldOut = stockKeys.remove(std::string("pears"));   // 删掉映射
 ```
 
-三个可运行的导览：`./build/bin/cppstream_example_pipelineTour`、
+四个可运行的导览：`./build/bin/cppstream_example_pipelineTour`、
 `./build/bin/cppstream_example_wordFrequency` 与
-`./build/bin/cppstream_example_collectionTour`。
+`./build/bin/cppstream_example_collectionTour`，
+以及并行流那一支 `./build/bin/cppstream_example_parallelTour`。
 
 ## 环境要求
 
 - C++23 编译器。开发与验证使用的是 `g++ 16.2.1`。
 - CMake 3.25 或更新。CLion 2026.2.1 自带 CMake 4.3.1，可以直接用。
 - Ninja（CLion 自带）或 Make。
+- 一个可用的线程实现。并行流需要一个进程级线程池，所以 `CMakeLists.txt` 会
+  `find_package(Threads)` 并把 `Threads::Threads` 挂到 INTERFACE 上——消费者因此自动拿到
+  `-pthread`，不必自己加。
 
 ## 构建
 
@@ -157,11 +191,14 @@ target：
 target_link_libraries(your_target PRIVATE cppstream::cppstream)
 ```
 
+库本身仍然不含任何 `.cpp`；`Threads::Threads` 只是把平台需要的线程链接选项传给消费者
+（并行流共享的那个线程池是惰性创建的，只用到顺序 API 的程序不会起线程）。
+
 ## 命名
 
 全库 camelCase，与它镜像的 Java API 一致：类型与 concept 用 `CamelCase`，函数、变量、
 枚举常量用 `camelBack`，私有数据成员带尾下划线。规则写在 `.clang-format` 与
-`.clang-tidy` 里。
+`.clang-tidy` 里；两个工具都由 CLion 自带，命令行怎么调见 `DESIGN.md` §4.1。
 
 ---
 
@@ -176,13 +213,19 @@ the behaviour was verified against a real JDK, and the milestone plan.
 
 ## Status
 
-`M0`–`M10` are complete: **223 test cases / 1402 assertions**, all passing in
+`M0`–`M11` are complete: **242 test cases / 1491 assertions**, all passing in
 Debug, `-Werror` and ASan+UBSan configurations, plus 5 compile-failure tests
 registered with CTest. The library builds with `-fno-rtti` too.
 
 - `Stream<T>` — 14 intermediate operations, 16 terminal operations, 12 static
   factories. Pull-based, lazy, single-use (enforced at compile time and at run
   time), with `gather()`, `mapMulti()`, `ofRange()` and a `sizeHint()` fast path.
+- **Parallel streams**: `parallel()` / `parallelStream()` are real, and the stages
+  after them batch their elements onto a shared thread pool. Results are
+  byte-for-byte the sequential ones (encounter order survives), `collect` /
+  `reduce` / `min` / `max` / `sum` accumulate per slice and merge with the
+  combiner in order, and the three `match` terminals still short-circuit. The
+  execution model is not Java's; see DESIGN.md divergence 8 and section 7.10.
 - `Collector<T, A, R>` plus the full `Collectors` vocabulary, and
   `Gatherer<T, A, R>` plus `Gatherers` (`windowFixed`, `windowSliding`, `fold`,
   `scan`).
@@ -214,9 +257,20 @@ registered with CTest. The library builds with `-fno-rtti` too.
   both this library and the JDK, byte for byte.
 - `Lists` / `Sets` / `Maps` factories, and three runnable examples.
 
-Deliberately still missing, and recorded as such: **parallel streams**. That is
-the only gap left. `parallel()` is declared and throws, by request; `mapConcurrent`
-is absent with it, because it needs virtual threads to mean anything.
+The parallel execution model is this library's own, because **a pull pipeline's
+source cannot be split** -- a stage is just a "give me the next element" closure,
+with none of the `Spliterator.trySplit()` information Java relies on -- so the
+ForkJoinPool route was not available. Instead the stages **after** `parallel()`
+pull a batch, run it on the shared pool, and hand it back in order; the batch size
+is bounded by a pull budget, so an unbounded source (`iterate` / `generate`)
+degrades to sequential instead of prefetching itself into a hang. The three
+consequences worth remembering are in DESIGN.md section 7.10: the flag applies only
+from the call onwards, batching reads ahead by a bounded amount (`peek` /
+`forEach` actions no longer finish in order), and unbounded sources do not run in
+parallel.
+
+Still deliberately missing, and recorded as such: `mapConcurrent`, which is just
+`map` once virtual threads are off the table.
 
 ### Quick look
 
@@ -269,6 +323,27 @@ const auto repeated = cppstream::Stream<int>::of(1, 2, 3)
 const std::vector<int> raw{5, 3, 1};
 const auto sorted = cppstream::Stream<int>::ofRange(raw).sorted().toList();
 
+// The stages after parallel() batch onto a shared pool; the result is the
+// sequential one, byte for byte.
+const auto parallelSum = cppstream::Stream<std::int64_t>::range(0, 1'000'000)
+                             .parallel()
+                             .map([](std::int64_t value) { return value * value; })
+                             .sum();
+
+// parallelStream() on a container is the idiomatic entry point: the flag has to
+// be set before the heavy stages are built, so `f` below does run in parallel.
+cppstream::ArrayList<std::string> names{"carol", "alice", "bob"};
+const auto roster = names.parallelStream().collect(
+    cppstream::Collectors::joining<std::string>(", "));
+
+// An unbounded source has no bound to read ahead against, so it degrades to
+// sequential -- which is why this one returns.
+const auto firstMultipleOfSevenParallel =
+    cppstream::Stream<std::int64_t>::iterate(1, [](std::int64_t value) { return value + 1; })
+        .parallel()
+        .filter([](std::int64_t value) { return value % 7 == 0; })
+        .findFirst();
+
 // subSet is a window onto the same tree: writes go through, and anything outside
 // the fence pair is rejected.
 cppstream::TreeSet<int> points{10, 20, 30, 40, 50};
@@ -290,15 +365,19 @@ auto stockKeys = descendingStock.navigableKeySet();  // "pears", "apples"
 const bool soldOut = stockKeys.remove(std::string("pears"));   // removes the mapping
 ```
 
-Three runnable tours: `./build/bin/cppstream_example_pipelineTour`,
+Four runnable tours: `./build/bin/cppstream_example_pipelineTour`,
 `./build/bin/cppstream_example_wordFrequency` and
-`./build/bin/cppstream_example_collectionTour`.
+`./build/bin/cppstream_example_collectionTour`,
+plus `./build/bin/cppstream_example_parallelTour` for the parallel pipeline.
 
 ## Requirements
 
 - A C++23 compiler. Developed and verified against `g++ 16.2.1`.
 - CMake 3.25 or newer. CLion 2026.2.1 bundles CMake 4.3.1, which is fine.
 - Ninja (bundled with CLion) or Make.
+- A working thread implementation. Parallel streams own a process-wide pool, so
+  `CMakeLists.txt` calls `find_package(Threads)` and attaches `Threads::Threads` to
+  the INTERFACE target -- consumers therefore get `-pthread` without asking.
 
 ## Building
 
@@ -339,9 +418,14 @@ section 7.4). The library is a header-only INTERFACE target:
 target_link_libraries(your_target PRIVATE cppstream::cppstream)
 ```
 
+The library still ships no `.cpp`; `Threads::Threads` only forwards the platform's
+thread link options to the consumer (the pool parallel streams share is created
+lazily, so a program that stays sequential never starts a thread).
+
 ## Naming
 
 camelCase throughout, matching the Java API it mirrors: `CamelCase` for types and
 concepts, `camelBack` for functions, variables and enum constants, with a
 trailing underscore on private data members. `.clang-format` and `.clang-tidy`
-encode the rules.
+encode the rules; both tools ship with CLion, see `DESIGN.md` section 4.1 for the
+command line.

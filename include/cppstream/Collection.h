@@ -54,6 +54,15 @@ public:
     /// value, so a stream never aliases the container. See DESIGN.md section 6.6.
     [[nodiscard]] virtual Stream<T> stream() const = 0;
 
+    /// Java: Collection.parallelStream().
+    ///
+    /// The container knows its size, so the stream starts with a pull budget and
+    /// every element-wise stage built from it can batch. See DESIGN.md divergence 8
+    /// for why the parallel flag has to be set *before* the stages are built, which
+    /// makes this -- like Java's -- the idiomatic entry point for a parallel
+    /// pipeline.
+    [[nodiscard]] virtual Stream<T> parallelStream() const = 0;
+
     /// Java: Collection.equals(other). Order-sensitive, as in Java's
     /// AbstractCollection; Set overrides it to be order-insensitive.
     [[nodiscard]] virtual bool equals(const Collection<T>& other) const = 0;

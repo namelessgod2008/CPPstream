@@ -56,13 +56,12 @@ TEST_CASE("windowSliding overlaps windows and drops the incomplete tail")
 
 TEST_CASE("fold emits exactly one element, and emits it even for an empty stream")
 {
-    const std::vector<int> folded = cppstream::Stream<int>::of(std::vector<int>{1, 2, 3, 4})
-                                        .gather(cppstream::Gatherers::fold<int, int>(
-                                            int{0}, [](int total, const int& value) {
-                                                return total + value;
-                                            }))
-                                        .toList()
-                                        .toArray();
+    const std::vector<int> folded =
+        cppstream::Stream<int>::of(std::vector<int>{1, 2, 3, 4})
+            .gather(cppstream::Gatherers::fold<int, int>(
+                0, [](int total, const int& value) { return total + value; }))
+            .toList()
+            .toArray();
     CHECK(folded == std::vector<int>({10}));
 
     CHECK(cppstream::Stream<int>::empty()
@@ -79,7 +78,7 @@ TEST_CASE("scan emits the initial value and every intermediate accumulation")
     const std::vector<int> scanned =
         cppstream::Stream<int>::of(std::vector<int>{1, 2, 3})
             .gather(cppstream::Gatherers::scan<int, int>(
-                int{0}, [](int total, const int& value) { return total + value; }))
+                0, [](int total, const int& value) { return total + value; }))
             .toList()
             .toArray();
     CHECK(scanned == std::vector<int>({0, 1, 3, 6}));

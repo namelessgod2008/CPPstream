@@ -25,7 +25,7 @@
 
 namespace cppstream {
 
-#if defined(__cpp_lib_move_only_function)
+#ifdef __cpp_lib_move_only_function
 inline constexpr bool hasMoveOnlyFunction = true;
 #else
 inline constexpr bool hasMoveOnlyFunction = false;
@@ -55,6 +55,7 @@ static_assert(hasOptionalMonadic,
 #include <cppstream/Elements.h>
 #include <cppstream/Gatherer.h>
 #include <cppstream/Optional.h>
+#include <cppstream/Parallel.h>
 #include <cppstream/RuntimeException.h>
 
 // Stream.h also provides the out-of-line definition of Optional<T>::stream(),

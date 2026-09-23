@@ -593,7 +593,7 @@ private:
 template <class K, class V>
 class EntrySetView : public AbstractSet<typename Map<K, V>::Entry> {
 public:
-    using Entry = typename Map<K, V>::Entry;
+    using Entry = Map<K, V>::Entry;
     using keyType = K;
     using valueType = V;
 

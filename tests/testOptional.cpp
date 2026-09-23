@@ -58,8 +58,11 @@ TEST_CASE("get() throws NoSuchElementException with Java's message")
 {
     const cppstream::Optional<int> absent;
 
-    CHECK_THROWS_WITH_AS(absent.get(), "No value present", cppstream::NoSuchElementException);
-    CHECK_THROWS_AS(absent.get(), cppstream::RuntimeException);
+    // The static_cast<void> is required because get() is [[nodiscard]] and the
+    // CHECK_THROWS_* macros discard the value by design.
+    CHECK_THROWS_WITH_AS(static_cast<void>(absent.get()), "No value present",
+        cppstream::NoSuchElementException);
+    CHECK_THROWS_AS(static_cast<void>(absent.get()), cppstream::RuntimeException);
 }
 
 TEST_CASE("get() on a non-const lvalue yields a mutable reference")
@@ -96,14 +99,15 @@ TEST_CASE("orElseThrow supports both the Java 10 no-arg form and a custom suppli
     const cppstream::Optional<int> absent;
 
     CHECK(present.orElseThrow() == 1);
-    CHECK_THROWS_AS(absent.orElseThrow(), cppstream::NoSuchElementException);
+    CHECK_THROWS_AS(static_cast<void>(absent.orElseThrow()), cppstream::NoSuchElementException);
 
     CHECK(present.orElseThrow([] {
         return cppstream::IllegalStateException("unreachable");
     }) == 1);
-    CHECK_THROWS_WITH_AS(absent.orElseThrow([] {
-        return cppstream::NoSuchElementException("nothing here");
-    }), "nothing here", cppstream::NoSuchElementException);
+    CHECK_THROWS_WITH_AS(static_cast<void>(absent.orElseThrow([] {
+                             return cppstream::NoSuchElementException("nothing here");
+                         })),
+        "nothing here", cppstream::NoSuchElementException);
 }
 
 TEST_CASE("ifPresent and ifPresentOrElse run exactly one branch")

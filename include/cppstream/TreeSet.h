@@ -274,7 +274,7 @@ public:
 
     private:
         const TreeSet* owner_;
-        typename Sorted::const_iterator current_;
+        Sorted::const_iterator current_;
         int expectedModCount_;
     };
 
@@ -313,8 +313,8 @@ public:
 
     private:
         TreeSet* owner_;
-        typename Sorted::iterator current_;
-        typename Sorted::iterator last_;
+        Sorted::iterator current_;
+        Sorted::iterator last_;
         bool hasLast_ = false;
         int expectedModCount_;
     };
@@ -355,8 +355,8 @@ public:
 
     private:
         TreeSet* owner_;
-        typename Sorted::reverse_iterator current_;
-        typename Sorted::reverse_iterator lastReturned_;
+        Sorted::reverse_iterator current_;
+        Sorted::reverse_iterator lastReturned_;
         bool hasLast_ = false;
         int expectedModCount_;
     };
@@ -378,7 +378,7 @@ public:
 
     private:
         const TreeSet* owner_;
-        typename Sorted::const_reverse_iterator current_;
+        Sorted::const_reverse_iterator current_;
         int expectedModCount_;
     };
 
@@ -435,7 +435,7 @@ template <class T, class Compare>
 class TreeSetRangeView final : public AbstractSet<T> {
 public:
     using valueType = T;
-    using Sorted = typename TreeSet<T, Compare>::Sorted;
+    using Sorted = TreeSet<T, Compare>::Sorted;
 
     /// A modifiable view, built by the non-const overloads of subSet/headSet/
     /// tailSet/descendingSet. The fences are always the *ascending* pair; only the
@@ -724,7 +724,7 @@ public:
     private:
         const TreeSetRangeView* owner_;
         bool descending_;
-        typename TreeSet<T, Compare>::Sorted::const_iterator cursor_;
+        TreeSet<T, Compare>::Sorted::const_iterator cursor_;
         int expectedModCount_;
     };
 
@@ -767,7 +767,7 @@ public:
             // A forward cursor already sits past the element it yielded; a reverse
             // one sits on it, so erasing invalidates it and the successor has to be
             // captured first.
-            const typename TreeSet<T, Compare>::Sorted::iterator successor = std::next(last_);
+            const auto successor = std::next(last_);
             static_cast<void>(owner_->writable().remove(*last_));
             if (descending_) {
                 cursor_ = successor;
@@ -779,8 +779,8 @@ public:
     private:
         TreeSetRangeView* owner_;
         bool descending_;
-        typename TreeSet<T, Compare>::Sorted::iterator cursor_;
-        typename TreeSet<T, Compare>::Sorted::iterator last_;
+        TreeSet<T, Compare>::Sorted::iterator cursor_;
+        TreeSet<T, Compare>::Sorted::iterator last_;
         bool hasLast_ = false;
         int expectedModCount_;
     };
@@ -1102,19 +1102,15 @@ private:
         return toInclusive_ ? tree.upper_bound(*to_) : tree.lower_bound(*to_);
     }
 
-    [[nodiscard]] typename Sorted::const_iterator firstInRange() const {
-        return firstInRangeOf(*backing_);
-    }
+    [[nodiscard]] Sorted::const_iterator firstInRange() const { return firstInRangeOf(*backing_); }
 
-    [[nodiscard]] typename Sorted::const_iterator pastLastInRange() const {
+    [[nodiscard]] Sorted::const_iterator pastLastInRange() const {
         return pastLastInRangeOf(*backing_);
     }
 
-    [[nodiscard]] typename Sorted::iterator firstInRangeForWrite() {
-        return firstInRangeOf(writable());
-    }
+    [[nodiscard]] Sorted::iterator firstInRangeForWrite() { return firstInRangeOf(writable()); }
 
-    [[nodiscard]] typename Sorted::iterator pastLastInRangeForWrite() {
+    [[nodiscard]] Sorted::iterator pastLastInRangeForWrite() {
         return pastLastInRangeOf(writable());
     }
 

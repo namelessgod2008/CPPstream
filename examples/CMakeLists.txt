@@ -3,7 +3,8 @@
 set(CPPSTREAM_EXAMPLES
     pipelineTour
     wordFrequency
-    collectionTour)
+    collectionTour
+    parallelTour)
 
 foreach(example IN LISTS CPPSTREAM_EXAMPLES)
     add_executable(cppstream_example_${example} ${example}.cpp)

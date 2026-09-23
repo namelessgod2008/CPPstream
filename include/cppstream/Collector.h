@@ -12,10 +12,12 @@ namespace cppstream {
 
 /// Java: java.util.stream.Collector.Characteristics.
 ///
-/// `concurrent` and `unordered` are carried for source fidelity only: the library
-/// has no parallel streams, and a sequential pipeline always preserves encounter
-/// order. `identityFinish` is meaningful -- it says the finisher returns its
-/// argument unchanged, so a caller may skip it and move the accumulator.
+/// `concurrent` and `unordered` are carried for source fidelity only. A parallel
+/// collect here does not share one accumulator across threads -- it gives each
+/// slice its own and merges them in encounter order (see Stream.h) -- so nothing
+/// ever asks whether an accumulator is concurrent-safe, and no pipeline ever drops
+/// encounter order. `identityFinish` is meaningful -- it says the finisher returns
+/// its argument unchanged, so a caller may skip it and move the accumulator.
 enum class Characteristics { concurrent, unordered, identityFinish };
 
 /// A port of java.util.stream.Collector.

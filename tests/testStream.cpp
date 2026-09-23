@@ -19,7 +19,7 @@ public:
 
     [[nodiscard]] cppstream::Stream<int> stream() {
         return cppstream::Stream<int>(cppstream::Stream<int>::NextFn(
-            [this, index = std::size_t{0}]() mutable -> std::optional<int> {
+            [this, index = std::size_t{0}] mutable -> std::optional<int> {
                 if (index >= values_.size()) {
                     return std::nullopt;
                 }
@@ -323,15 +323,14 @@ TEST_CASE("range and rangeClosed handle empty and boundary cases")
         cppstream::Stream<int>::rangeClosed(maximum - 1, maximum).toArray(), {maximum - 1, maximum}));
 }
 
-TEST_CASE("parallel is declared but not implemented, and sequential is a no-op")
-{
+TEST_CASE("parallel and sequential flip the parallel flag") {
     CHECK_FALSE(cppstream::Stream<int>::of(1).isParallel());
     CHECK_FALSE(cppstream::Stream<int>::of(1).sequential().isParallel());
+    CHECK(cppstream::Stream<int>::of(1).parallel().isParallel());
+    CHECK(cppstream::Stream<int>::of(1).parallel().sequential().isParallel() == false);
+    CHECK(cppstream::Stream<int>::of(1).parallel().map([](int v) { return v; }).isParallel());
 
     CHECK(sameValues(cppstream::Stream<int>::of(1, 2, 3).unordered().toArray(), {1, 2, 3}));
-
-    CHECK_THROWS_AS(
-        cppstream::Stream<int>::of(1).parallel(), cppstream::UnsupportedOperationException);
 }
 
 TEST_CASE("sorted works on a non-trivial element type")

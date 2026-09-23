@@ -58,7 +58,7 @@ TEST_CASE("braced initialisation is a list, parenthesised is a capacity")
     CHECK(reserved.isEmpty());
 
     const cppstream::ArrayList<int> source{1, 2, 3};
-    const cppstream::ArrayList<int> copied(source);
+    const cppstream::ArrayList<int>& copied(source);
     CHECK(sameValues(copied.toArray(), {1, 2, 3}));
 
     // Going through the Collection constructor explicitly, rather than the copy
@@ -109,7 +109,7 @@ TEST_CASE("equals is element-wise in order and hashCode is the ordered 31* fold"
     CHECK(left.hashCode() == same.hashCode());
 
     // Java's AbstractList.hashCode(): h = 31*h + e, starting from 1.
-    CHECK(left.hashCode() == 30817u);
+    CHECK(left.hashCode() == 30817U);
 
     // Order matters for a List, which is exactly why AbstractSet overrides this
     // with the order-insensitive sum.
@@ -134,7 +134,7 @@ TEST_CASE("element types need neither operator== nor std::hash")
 
     const Plain& first = values.get(0);
     CHECK(values.contains(first));
-    CHECK(values.hashCode() != 0u);
+    CHECK(values.hashCode() != 0U);
 }
 
 TEST_CASE("index problems raise Java's exception type and message")
