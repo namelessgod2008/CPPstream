@@ -124,7 +124,8 @@ public:
     [[nodiscard]] virtual Optional<V> putIfAbsent(K&& key, V&& value) = 0;
 
     virtual void putAll(const Map<K, V>& other) {
-        other.visitEntries([this](const K& key, const V& value) { this->put(key, value); });
+        other.visitEntries(
+            [this](const K& key, const V& value) { static_cast<void>(this->put(key, value)); });
     }
 
     /// Java: Map.remove(key).
@@ -300,9 +301,9 @@ public:
 
     /// Java: HashMap.KeySet.add, which throws. A key with no value is not
     /// something a Map can represent, so there is no sensible thing to do here.
-    bool add(const K&) override { throw unsupported(); }
+    bool add(const K& /*key*/) override { throw unsupported(); }
 
-    bool add(K&&) override { throw unsupported(); }
+    bool add(K&& /*key*/) override { throw unsupported(); }
 
     /// Java: KeySet.remove(key), which removes the *mapping*, not merely the key.
     bool remove(const K& key) override { return writable().remove(key).isPresent(); }
@@ -406,6 +407,9 @@ public:
 
 private:
     static UnsupportedOperationException unsupported() {
+        // The exception constructors are explicit, so the braced form this check
+        // wants is `return {X(...)}`, which readability-trailing-comma then rejects.
+        // NOLINTNEXTLINE(modernize-return-braced-init-list)
         return UnsupportedOperationException("keySet does not support add; put a mapping instead");
     }
 
@@ -449,9 +453,9 @@ public:
 
     /// Java: HashMap.Values.add, which throws. A value with no key has nowhere to
     /// live, which is exactly why Java forbids it too.
-    bool add(const V&) override { throw unsupported(); }
+    bool add(const V& /*value*/) override { throw unsupported(); }
 
-    bool add(V&&) override { throw unsupported(); }
+    bool add(V&& /*value*/) override { throw unsupported(); }
 
     /// Java: HashMap.Values.remove(value), which removes the first mapping whose
     /// value matches. "First" is the map's own iteration order.
@@ -567,6 +571,9 @@ public:
 
 private:
     static UnsupportedOperationException unsupported() {
+        // The exception constructors are explicit, so the braced form this check
+        // wants is `return {X(...)}`, which readability-trailing-comma then rejects.
+        // NOLINTNEXTLINE(modernize-return-braced-init-list)
         return UnsupportedOperationException("values does not support add; put a mapping instead");
     }
 
@@ -613,9 +620,9 @@ public:
     }
 
     /// Java: HashMap.EntrySet.add, which throws. Adding a mapping is put()'s job.
-    bool add(const Entry&) override { throw unsupported(); }
+    bool add(const Entry& /*entry*/) override { throw unsupported(); }
 
-    bool add(Entry&&) override { throw unsupported(); }
+    bool add(Entry&& /*entry*/) override { throw unsupported(); }
 
     /// Java: HashMap.EntrySet.remove(entry), which removes the mapping only when
     /// the value matches too.
@@ -736,7 +743,11 @@ public:
 
 private:
     static UnsupportedOperationException unsupported() {
-        return UnsupportedOperationException("entrySet does not support add; put a mapping instead");
+        // The exception constructors are explicit, so the braced form this check
+        // wants is `return {X(...)}`, which readability-trailing-comma then rejects.
+        // NOLINTNEXTLINE(modernize-return-braced-init-list)
+        return UnsupportedOperationException(
+            "entrySet does not support add; put a mapping instead");
     }
 
     [[nodiscard]] Map<K, V>& writable() const {

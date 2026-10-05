@@ -183,19 +183,41 @@ GCC_INC=/usr/lib/gcc/x86_64-pc-linux-gnu/16/include   # 见下面第 2 条
 
 # 测试 / 示例是普通 TU
 "$CT" --config-file=.clang-tidy tests/testParallel.cpp -- \
-    -std=c++23 -Iinclude -Itests/third_party/doctest -isystem "$GCC_INC"
+    -std=c++23 -Iinclude -isystem "$GCC_INC"
+
+# 全库一遍：头文件当 header TU（快，但模板不实例化会漏报），
+# 测试/示例走编译数据库（慢，但实例化后才看得见的告警都在这里）
+for header in include/cppstream/*.h; do
+    "$CT" --config-file=.clang-tidy "$header" -- \
+        -std=c++23 -Iinclude -x c++-header -isystem "$GCC_INC"
+done
+for tu in $(python3 -c 'import json;print(" ".join(e["file"] for e in json.load(open("cmake-build-debug/compile_commands.json"))))'); do
+    "$CT" -p cmake-build-debug --config-file=.clang-tidy \
+        --extra-arg=-isystem --extra-arg="$GCC_INC" "$tu"
+done
 ```
 
 两个踩过的坑，记在这里免得再踩：
 
 1. **`.clang-format` 里只能写 `Standard: Latest`，不能写 `c++23`。** clang-format 的 `Standard` 枚举只到 `c++20`，写 `c++23` 会让整份配置解析失败（`unknown enumerated scalar`）；更麻烦的是读不动的配置会让 IDE **静默退回默认样式**，看起来"有配置"其实没生效。`Latest` 是"本版本支持的最新标准"，语义等价，且不会随工具升级失效。
-2. **命令行跑 clang-tidy 要补一个 `-isystem`。** CLion 的 `bin/clang/linux/x64/bin` 下只有 `clang-tidy` / `clangd` / `clazy-standalone` / `llvm-symbolizer`，没有 clang 的 resource dir（`lib/clang/<ver>/include/stddef.h`），于是 clang-tidy 以 `'stddef.h' file not found` 致命错误收尾。致命错误会让 AST 不完整，还会顺带报出假告警（例如 `readability-convert-member-functions-to-static`）。补上 GCC 的 include 目录即可；CLion 自己的 clang-tidy 集成处理了这件事，只有命令行需要。
+2. **走 `-p` 时补参数要用 `--extra-arg`，不能用 `--`。** `clang-tidy -p <dir> file -- -DFOO` 里的 `--` 参数会整条顶掉编译数据库里的命令行，而不是追加：症状是突然报 `'doctest/doctest.h' file not found`，因为 `-Itests/third_party/doctest` 也跟着一起没了。追加要用 `--extra-arg=`（要加两个词就写两次）。
+3. **命令行跑 clang-tidy 要补一个 `-isystem`（两种调用方式都要）。** CLion 的 `bin/clang/linux/x64/bin` 下只有 `clang-tidy` / `clangd` / `clazy-standalone` / `llvm-symbolizer`，没有 clang 的 resource dir（`lib/clang/<ver>/include/stddef.h`），于是 clang-tidy 以 `'stddef.h' file not found` 致命错误收尾。致命错误会让 AST 不完整，还会顺带报出假告警（例如 `readability-convert-member-functions-to-static`）。补上 GCC 的 include 目录即可；CLion 自己的 clang-tidy 集成处理了这件事，只有命令行需要。
 
-**M11 结束时的状态**：
+**全库 clang-tidy 清零后的状态**：
 
-- 本次改动的文件都已按 `.clang-format` 排过（新文件整份排，改动文件只排碰过的 hunk）；`clang-tidy` 在 `Parallel.h`、`testParallel.cpp` 上是**零告警**，`Stream.h` 里唯一一条 `bugprone-easily-swappable-parameters`（构造函数里 `SizeHint` / `Budget` 同型、可互换）用带说明的 `NOLINTNEXTLINE` 显式记下，没有偷偷绕过去。
-- 历史代码不干净：44 个文件、约 1300 行（一方代码共 15272 行）与 `.clang-format` 的期望不一致；整库重排会产出一份横跨 50 个文件的大 diff，所以没顺手做——要做应当单独一次提交。典型差异是 lambda 形参对齐、`->` 返回类型的换行位置、`#include` 分组顺序。
-- `clang-tidy` 还有 158 条告警（每个头文件单独跑一遍，同一条只在其所属文件的 TU 里计一次；`Stream.h` 26 条、`Collectors.h` 35 条、`TreeSet.h` 30 条）。前排全是纯风格规则：`readability-redundant-typename` 67、`readability-redundant-lambda-parameter-list` 46（`[x]() mutable -> T` 是本库统一写法）、`readability-use-std-min-max` 12、`readability-named-parameter` 9，其余都是个位数。这些要一起决定——关掉，还是全库修一遍；零散改只会让风格更不一致。（本次新增代码里只剩 3 条这类风格告警，都在 `tests/testParallel.cpp`，为了跟既有写法一致故意留着。）
+- `clang-tidy` 在**全部 34 个头文件 + 25 个测试/示例 TU** 上零告警、零 `error`。上面两套调用都要跑：头文件当 header TU 只看得见不依赖实例化的东西（整库这样跑下来只剩 20 余条），模板实例化之后才暴露的那些只有测试/示例 TU 报得出来。
+- 清掉的 50 条（去重后）：`readability-named-parameter` 9、`bugprone-unchecked-optional-access` 6、`bugprone-use-after-move` 6、`readability-use-anyofallof` 5、`modernize-return-braced-init-list` 5、`bugprone-exception-escape` 4、`readability-redundant-parentheses` 4、`readability-suspicious-call-argument` 2、`readability-identifier-naming` 2、`clang-diagnostic-unused-lambda-capture` 2，以及 `performance-enum-size` / `performance-unnecessary-value-param` / `readability-redundant-declaration` / `clang-diagnostic-unused-result` / `performance-faster-string-find`（`value += "!"` 改成 `+= '!'`）各 1。
+- 三处是**结构性修**，不是绕过去：
+  - 批并行的终结操作改成携带**纯计数**。原来 `forEach` / `runParallelReduce` / `parallelWitness` 拿着一个"调用方已保证非空"的 `Budget` 再解引用，检查无法跨函数证明这一点（`.value()` 也一样被报，实测只有 `has_value()` 分支和 `value_or` 算"检查过"）。现在新增 `batchingCount()`（`budget_.value_or(0)`；0 正是 `batchRequest()` 眼里的"一次一个"），三个 helper 的形参改成 `std::size_t`，`chargeBudget` 多一个解包后的重载。类型现在说的是实话：这些路径上有界，就是有界。
+  - `runParallelReduce` 的分片容器从 `std::vector<std::optional<A>>` 改成 `std::vector<A>`：`supplier` 在**调用线程**上先把每片建好，worker 只往已经存在的累加器里累加（`supplier` 是 Collector 的 identity，本来就是廉价构造）。少了"槽位可能还没填"这个状态，按遭遇顺序的合并就成了全覆盖的。
+  - 四个示例的 `int main()` 拆成 `int run()` + 一个 `try/catch` 的 `main`，异常不再从 `main` 里穿出去（`bugprone-exception-escape`），退出码 0/1 也有了依据。
+- 另外 15 处是**带说明的沉默**（`NOLINT`），四组各有各的理由，都写在代码注释里：
+  - `bugprone-use-after-move` 6 处（`testStream.cpp` 3、`testCollector.cpp` / `testGatherer.cpp` / `examples/pipelineTour.cpp` 各 1）：这些测试**故意**再用一次已经被移动的流，抛出 `IllegalStateException` 正是它们要断言的东西。`testStream.cpp` 那三条用 `NOLINTBEGIN` / `NOLINTEND` 成对括住，免得三行各写一遍。
+  - `readability-redundant-parentheses` 3 处（都在 `Stream.h`）：clang-tidy 23 对 `std::move((*buffer)[index++])` 和 `(*innerNext)()` 会建议去掉括号，但**它自己的修复编译不过**——去掉后变成 `*(buffer[index++])` / `*(innerNext())`（已用最小复现验证）。同一规则的第 4 处（`++(*cursor)`）是真冗余，直接改了。
+  - `modernize-return-braced-init-list` 4 处（`Map.h` ×3、`TreeMap.h` ×1）：异常类的构造函数是 `explicit`，检查唯一接受的括号形式是 `return {X(...)}`，而那个形式又会踩上 `readability-trailing-comma`。
+  - `readability-suspicious-call-argument` 2 处（`TreeMap.h` / `TreeSet.h` 的 `makeSubWindowFor`）：递减视图要把一对边界**反着**存成升序，检查只看得见实参名，看不出来这是有意的——`makeReadOnlySubWindowFor` 里同样的写法它就没报，可见是启发式的。
+- `readability-identifier-naming` 那 2 条改的是**配置**而不是代码：`modCount_` / `frozen_` 是 protected 成员（容器层要把它们交给子类），而 `ProtectedMember*` 没配时不会继承 `PrivateMemberSuffix`，于是 `.clang-tidy` 里补了 `ProtectedMemberCase` / `ProtectedMemberSuffix`。
+- 历史代码的**格式**仍然不干净：41 个一方文件（约 15272 行）与 `.clang-format` 的期望不一致，典型差异是 lambda 形参对齐、`->` 返回类型的换行位置、`#include` 分组顺序。整库重排会产出一份横跨 40+ 文件的大 diff，所以仍然没顺手做——要做应当单独一次提交。本次动过的 hunk 都用 `--lines=` 排干净了（检查办法：按 `git diff -U0` 的新文件侧范围对每个 hunk 跑一遍 clang-format，看是否产生差异）。
 
 ---
 
@@ -665,7 +687,7 @@ parallelPool().forEach(batch.size(), [&](i) { out[i] = mapper(in[i]); });
 
 - **嵌套保护**：从池内工作线程发起的并行阶段**内联执行**而不是再排一个任务然后等线程。这不是优化，是防死锁：外层批次占着 N 个 worker 且都在等内层结果时，池里没有空线程可派，ForkJoinPool 靠 work-stealing 解决这个问题，这里用一个 `thread_local` 标志解决——代价是嵌套的并行降级为顺序，与 ForkJoin 无法切分时的取舍相同。测试 `a parallel stage pulled from inside a worker degrades instead of deadlocking` 盯着它。
 
-- **终结操作的分片合并**：`collect` / `reduce`（两个重载）/ `min` / `max` / `sum` 把一批切成 `parallelism()` 片，每片在自己的累加器上累加，再**按遭遇顺序**逐个 `combiner` 合并进一个总累加器。这正是 §8 第 8 条里被点名的"`Collector::combiner` 变成硬需求"——它是构造参数，一直都在，这次终于被调用（`Gatherer::combiner` 仍然缺席，理由见下）。合并顺序保证了 `toList` / `joining` / `groupingBy` 这些对顺序敏感的收集器在并行下也给出与顺序版逐字节相同的结果。内存上每次只保留 `parallelism()` 个分片，不会随元素总数增长。
+- **终结操作的分片合并**：`collect` / `reduce`（两个重载）/ `min` / `max` / `sum` 把一批切成 `parallelism()` 片，每片在自己的累加器上累加，再**按遭遇顺序**逐个 `combiner` 合并进一个总累加器。这正是 §8 第 8 条里被点名的"`Collector::combiner` 变成硬需求"——它是构造参数，一直都在，这次终于被调用（`Gatherer::combiner` 仍然缺席，理由见下）。合并顺序保证了 `toList` / `joining` / `groupingBy` 这些对顺序敏感的收集器在并行下也给出与顺序版逐字节相同的结果。内存上每次只保留 `parallelism()` 个分片，不会随元素总数增长。每片的初始累加器由**调用线程**先按 `supplier` 建好，worker 只往已经存在的对象里累加（`supplier` 是 Collector 的 identity，本来就是廉价构造），所以分片容器是 `std::vector<A>` 而不是 `std::vector<std::optional<A>>`——没有"槽位可能还没填"这个状态，按遭遇顺序的合并就是全覆盖的。
 
 **哪些真的并行、哪些是屏障**（`parallel()` 之后）：
 
@@ -1040,7 +1062,7 @@ M10 结束时唯一的记录在案缺口就是并行流，且当时的口径是"
 4. **终结操作分片合并**：`collect` / `reduce`（两种）/ `min` / `max` / `sum` 走同一个 `runParallelReduce`：一批切成 `parallelism()` 片，各片独立累加后**按遭遇顺序**逐个 `combiner` 合并。`Collector::combiner` 与 `Gatherer::combiner` 那个悬念就此落地——前者被调用（它从 M4 起就是构造参数），后者仍然缺席，因为 `gather` 是屏障。合并顺序保证 `toList` / `joining` / `groupingBy` 在并行下与顺序版逐字节相同。
 5. **短路与顺序的边界照旧**：三种 `match` 并行求值但一批命中即停止拉取；`findFirst` / `findAny` 仍只拉一个元素（有界并行流不会被它抽干）；`forEachOrdered` / `count` / `toArray` / `toList` / `average` 顺序执行；`sorted` / `reversed` / `distinct` / `mapMulti` / `gather` 是屏障，但并行标志继续往下传。
 
-**测试规模（M11 结束时）**：242 个 `TEST_CASE` / 1491 条断言 + 6 个 CTest 用例，三种配置（Debug、`-Werror`、ASan+UBSan）全部通过；`-fno-rtti` 亦可直接构建。新增测试单元 `testParallel.cpp`（19 个用例）：每条路径都拿顺序版当基准对拍，另有"并行确实用了多个线程"（`set<thread::id>` 计数）、"池内嵌套不死锁"、"无界源不预读"（`CountingSource` 数拉取次数）、"异常穿出并行阶段"、"`setParallelism(1)` 整体退化"、"`collect` 在 `groupingBy` 这类顺序敏感收集器上与顺序版相等"几条专门的用例。`Collection::parallelStream()` 让"先设标志再建阶段"成为默认写法。
+**测试规模（M11 结束时）**：242 个 `TEST_CASE` / 1490 条断言 + 6 个 CTest 用例，三种配置（Debug、`-Werror`、ASan+UBSan）全部通过；`-fno-rtti` 亦可直接构建。新增测试单元 `testParallel.cpp`（19 个用例）：每条路径都拿顺序版当基准对拍，另有"并行确实用了多个线程"（`set<thread::id>` 计数）、"池内嵌套不死锁"、"无界源不预读"（`CountingSource` 数拉取次数）、"异常穿出并行阶段"、"`setParallelism(1)` 整体退化"、"`collect` 在 `groupingBy` 这类顺序敏感收集器上与顺序版相等"几条专门的用例。`Collection::parallelStream()` 让"先设标志再建阶段"成为默认写法。
 
 ### 下一步 — 未做的部分
 

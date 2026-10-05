@@ -293,7 +293,7 @@ TEST_CASE("TreeMap range views are live windows, not copies")
 
     // forEach goes through the filtered visitEntries, so the window is what is
     // visited -- and a write to the value lands in the map.
-    window.forEach([](const int&, std::string& value) { value += "!"; });
+    window.forEach([](const int&, std::string& value) { value += '!'; });
     CHECK(*values.get(20) == "v20!");
     CHECK(*values.get(10) == "v10");
     CHECK(window.comparator()(1, 2));

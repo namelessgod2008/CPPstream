@@ -3,6 +3,7 @@
 #include <cppstream/Elements.h>
 #include <cppstream/Map.h>
 
+#include <algorithm>
 #include <cstddef>
 #include <functional>
 #include <memory>
@@ -49,12 +50,8 @@ public:
     }
 
     [[nodiscard]] bool containsValue(const V& value) const override {
-        for (const auto& entry : entries_) {
-            if (elementEquals(entry.second, value)) {
-                return true;
-            }
-        }
-        return false;
+        return std::ranges::any_of(
+            entries_, [&value](const auto& entry) { return elementEquals(entry.second, value); });
     }
 
     [[nodiscard]] const V* get(const K& key) const override {

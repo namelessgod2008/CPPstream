@@ -44,8 +44,7 @@ TEST_CASE("ofRange takes ownership of an rvalue range")
 {
     // Nothing outside the stage owns this vector, so the stream has to.
     auto stream = cppstream::Stream<int>::ofRange(std::vector<int>{1, 2, 3});
-    CHECK(stream.sizeHint().has_value());
-    CHECK(*stream.sizeHint() == 3);
+    CHECK(isKnown(stream.sizeHint(), 3));
     CHECK(std::move(stream).toList().toArray() == std::vector<int>({1, 2, 3}));
 
     CHECK(cppstream::Stream<int>::ofRange(std::views::iota(1, 6)).sum() == 15);

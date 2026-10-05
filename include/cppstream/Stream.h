@@ -352,6 +352,9 @@ public:
                 if (index >= buffer->size()) {
                     return std::nullopt;
                 }
+                // Removing the parentheses would re-parse this as
+                // *(buffer[index++]), which is a different expression.
+                // NOLINTNEXTLINE(readability-redundant-parentheses)
                 return std::optional<T>(std::in_place, std::move((*buffer)[index++]));
             }),
             promised, budget_, parallel_);
@@ -378,6 +381,9 @@ public:
                              }
                              const std::size_t position = buffer->size() - 1 - index;
                              ++index;
+                             // As in sorted(): dropping the parentheses would
+                             // re-parse as *(buffer[position]).
+                             // NOLINTNEXTLINE(readability-redundant-parentheses)
                              return std::optional<T>(std::in_place, std::move((*buffer)[position]));
                          }),
                          promised, budget_, parallel_);
@@ -495,10 +501,10 @@ public:
             }
             return;
         }
-        Budget remaining = budget_;
+        std::size_t remaining = batchingCount();
         std::vector<T> batch;
         for (;;) {
-            if (!fillBatch(next, batchRequest(*remaining, parallelChunk * parallelism()), batch)) {
+            if (!fillBatch(next, batchRequest(remaining, parallelChunk * parallelism()), batch)) {
                 return;
             }
             chargeBudget(remaining, batch.size());
@@ -585,8 +591,8 @@ public:
             return std::invoke(collector.finisher(), std::move(accumulator));
         }
         Accumulator merged = std::invoke(supplier);
-        runParallelReduce<Accumulator>(next, budget_, supplier, accumulate, collector.combiner(),
-                                       merged);
+        runParallelReduce<Accumulator>(next, batchingCount(), supplier, accumulate,
+                                       collector.combiner(), merged);
         return std::invoke(collector.finisher(), std::move(merged));
     }
 
@@ -666,7 +672,7 @@ public:
             }
             return false;
         }
-        return parallelWitness(next, budget_, predicate);
+        return parallelWitness(next, batchingCount(), predicate);
     }
 
     /// Java: Stream.allMatch(predicate).
@@ -684,7 +690,7 @@ public:
             }
             return true;
         }
-        return !parallelWitness(next, budget_,
+        return !parallelWitness(next, batchingCount(),
                                 [&predicate](T& value) { return !std::invoke(predicate, value); });
     }
 
@@ -700,7 +706,7 @@ public:
             }
             return true;
         }
-        return !parallelWitness(next, budget_, predicate);
+        return !parallelWitness(next, batchingCount(), predicate);
     }
 
     /// Java: Stream.reduce(accumulator). Empty in, empty out.
@@ -724,7 +730,7 @@ public:
             }
             return Optional<T>::of(std::move(result));
         }
-        return reduceParallelElements(next, budget_, accumulator);
+        return reduceParallelElements(next, batchingCount(), accumulator);
     }
 
     /// Java: Stream.reduce(identity, accumulator).
@@ -743,7 +749,7 @@ public:
             }
             return result;
         }
-        Optional<T> reduced = reduceParallelElements(next, budget_, accumulator);
+        Optional<T> reduced = reduceParallelElements(next, batchingCount(), accumulator);
         if (reduced.isEmpty()) {
             return std::move(identity);
         }
@@ -769,7 +775,7 @@ public:
         }
         Optional<T> merged = Optional<T>::empty();
         runParallelReduce<Optional<T>>(
-            next, budget_, [] { return Optional<T>::empty(); },
+            next, batchingCount(), [] { return Optional<T>::empty(); },
             [&comparator](Optional<T>& run, T& element) {
                 if (run.isEmpty() || comparator.compare(element, run.get()) < 0) {
                     run = Optional<T>::of(std::move(element));
@@ -807,7 +813,7 @@ public:
         }
         Optional<T> merged = Optional<T>::empty();
         runParallelReduce<Optional<T>>(
-            next, budget_, [] { return Optional<T>::empty(); },
+            next, batchingCount(), [] { return Optional<T>::empty(); },
             [&comparator](Optional<T>& run, T& element) {
                 if (run.isEmpty() || comparator.compare(element, run.get()) > 0) {
                     run = Optional<T>::of(std::move(element));
@@ -940,7 +946,7 @@ public:
                                      return std::nullopt;
                                  }
                                  R value = **cursor;
-                                 ++(*cursor);
+                                 ++*cursor;
                                  return std::optional<R>(std::in_place, std::move(value));
                              }),
                          promised, promised);
@@ -1139,6 +1145,13 @@ private:
         return canParallelize() ? budget_ : Budget{};
     }
 
+    /// The same bound as a plain count, for the batched terminals and the helpers
+    /// they call. Those all run only once canBatchTerminal() has established that
+    /// the upstream is bounded, so the bound is always present; 0 is what
+    /// batchRequest() reads as "one element at a time", which is the safe way to
+    /// degrade if that invariant is ever broken.
+    [[nodiscard]] std::size_t batchingCount() const noexcept { return budget_.value_or(0); }
+
     /// The next batch may never ask for more than the chunk, never for zero, and
     /// never for more than the budget says is left.
     [[nodiscard]] static std::size_t batchRequest(std::size_t remaining, std::size_t chunk) {
@@ -1166,8 +1179,13 @@ private:
     /// an over-eager estimate cannot wrap around and turn into a huge one.
     static void chargeBudget(Budget& budget, std::size_t pulled) noexcept {
         if (budget) {
-            *budget = *budget > pulled ? *budget - pulled : std::size_t{0};
+            chargeBudget(*budget, pulled);
         }
+    }
+
+    /// The same, for the loops that already carry the bound unwrapped.
+    static void chargeBudget(std::size_t& remaining, std::size_t pulled) noexcept {
+        remaining = remaining > pulled ? remaining - pulled : std::size_t{0};
     }
 
     /// Wraps `previous` so that elements are pulled in batches and `step` is applied
@@ -1243,6 +1261,8 @@ private:
                                        outer = std::size_t{0}] mutable -> std::optional<R> {
             for (;;) {
                 if (innerNext) {
+                    // Dropping the parentheses would re-parse as *(innerNext()).
+                    // NOLINTNEXTLINE(readability-redundant-parentheses)
                     std::optional<R> value = (*innerNext)();
                     if (value) {
                         return value;
@@ -1293,13 +1313,15 @@ private:
     /// (toList, joining, groupingBy) produce the sequential answer; it is also why
     /// `combine` must be associative for the arithmetic ones, exactly as Java
     /// requires of a parallel reduction.
+    ///
+    /// `remaining` is the caller's bound as a plain count, see batchingCount().
     template <class A, class Seed, class Accumulate, class Combine>
-    static void runParallelReduce(NextFn& next, Budget remaining, const Seed& seed,
+    static void runParallelReduce(NextFn& next, std::size_t remaining, const Seed& seed,
                                   const Accumulate& accumulate, const Combine& combine, A& merged) {
         std::vector<T> batch;
-        std::vector<std::optional<A>> slices;
+        std::vector<A> slices;
         for (;;) {
-            const std::size_t request = batchRequest(*remaining, parallelChunk * parallelism());
+            const std::size_t request = batchRequest(remaining, parallelChunk * parallelism());
             if (!fillBatch(next, request, batch)) {
                 return;
             }
@@ -1307,19 +1329,24 @@ private:
             const std::size_t workerCount = std::min<std::size_t>(parallelism(), batch.size());
             const std::size_t sliceSize = (batch.size() + workerCount - 1) / workerCount;
             const std::size_t sliceCount = (batch.size() + sliceSize - 1) / sliceSize;
+            // Every slice is seeded here, on the calling thread, so that a worker
+            // only ever folds into an accumulator that already exists. That is
+            // what makes the merge below total: slices is a plain vector, with no
+            // "not filled in yet" state for it to carry.
             slices.clear();
-            slices.resize(sliceCount);
+            slices.reserve(sliceCount);
+            for (std::size_t index = 0; index < sliceCount; ++index) {
+                slices.push_back(std::invoke(seed));
+            }
             parallelPool().forEach(sliceCount, [&](std::size_t index) {
                 const std::size_t begin = index * sliceSize;
                 const std::size_t end = std::min(begin + sliceSize, batch.size());
-                A local = std::invoke(seed);
                 for (std::size_t position = begin; position < end; ++position) {
-                    std::invoke(accumulate, local, batch[position]);
+                    std::invoke(accumulate, slices[index], batch[position]);
                 }
-                slices[index].emplace(std::move(local));
             });
-            for (std::optional<A>& slice : slices) {
-                merged = std::invoke(combine, std::move(merged), std::move(*slice));
+            for (A& slice : slices) {
+                merged = std::invoke(combine, std::move(merged), std::move(slice));
             }
         }
     }
@@ -1336,12 +1363,15 @@ private:
     /// a parallel pipeline. The flag is a plain relaxed atomic: workers only ever
     /// look at it to skip work, so a torn read is not possible and a late one only
     /// costs a little redundant work.
+    ///
+    /// `remaining` is the caller's bound as a plain count, see batchingCount().
     template <class Witness>
-    [[nodiscard]] static bool parallelWitness(NextFn& next, Budget remaining, Witness witness) {
+    [[nodiscard]] static bool parallelWitness(NextFn& next, std::size_t remaining,
+                                              Witness witness) {
         std::atomic<bool> found{false};
         std::vector<T> batch;
         for (;;) {
-            if (!fillBatch(next, batchRequest(*remaining, parallelChunk * parallelism()), batch)) {
+            if (!fillBatch(next, batchRequest(remaining, parallelChunk * parallelism()), batch)) {
                 return false;
             }
             chargeBudget(remaining, batch.size());
@@ -1360,7 +1390,7 @@ private:
     /// encounter order and without an identity. reduce(accumulator) returns it as is;
     /// reduce(identity, accumulator) folds the identity in front of it.
     template <class F>
-    [[nodiscard]] static Optional<T> reduceParallelElements(NextFn& next, Budget remaining,
+    [[nodiscard]] static Optional<T> reduceParallelElements(NextFn& next, std::size_t remaining,
                                                             F& accumulator) {
         Optional<T> merged = Optional<T>::empty();
         runParallelReduce<Optional<T>>(

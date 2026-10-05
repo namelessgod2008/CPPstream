@@ -253,6 +253,9 @@ TEST_CASE("a stream can be consumed exactly once")
     auto stream = cppstream::Stream<int>::of(std::vector<int>{1, 2, 3});
 
     CHECK(std::move(stream).count() == 3);
+    // Every statement below reads the stream after it was moved from: that reuse
+    // is exactly what each CHECK_THROWS_* asserts.
+    // NOLINTBEGIN(bugprone-use-after-move)
     // The static_cast<void> is required because these terminals are [[nodiscard]]
     // and CHECK_THROWS_* discards the value by design.
     CHECK_THROWS_WITH_AS(static_cast<void>(std::move(stream).count()),
@@ -261,6 +264,7 @@ TEST_CASE("a stream can be consumed exactly once")
         cppstream::IllegalStateException);
     CHECK_THROWS_AS(std::move(stream).filter([](int) { return true; }),
         cppstream::IllegalStateException);
+    // NOLINTEND(bugprone-use-after-move)
 }
 
 TEST_CASE("a stream can be built from every Java factory")

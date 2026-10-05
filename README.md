@@ -8,7 +8,7 @@ C++23 复刻 Java 的 `java.util.stream` API 与 `java.util.Collection` 体系�
 
 ## 状态
 
-`M0`–`M11` 全部完成：**242 个测试用例 / 1491 条断言**，在 Debug、`-Werror`、ASan+UBSan
+`M0`–`M11` 全部完成：**242 个测试用例 / 1490 条断言**，在 Debug、`-Werror`、ASan+UBSan
 三种配置下全部通过，另有 5 个编译失败用例接入 CTest。库在 `-fno-rtti` 下同样可以构建。
 
 - `Stream<T>` —— 14 个中间操作、16 个终结操作、12 个静态工厂。拉取式、惰性、单次消费
@@ -39,6 +39,9 @@ C++23 复刻 Java 的 `java.util.stream` API 与 `java.util.Collection` 体系�
   `tests/testDescendingViews.cpp`。递减这部分另外做了对拍：本库与 JDK 各生成一份 777 行的
   集合转录和 606 行的映射转录，两份都逐字节相同。
 - `Lists` / `Sets` / `Maps` 工厂，以及四个可运行的示例。
+- 工具链干净度：`clang-tidy`（`bugprone-` / `modernize-` / `performance-` / `readability-`
+  全套）在全部 34 个头文件与 25 个测试/示例 TU 上**零告警**。代码与 `.clang-format` 之间
+  的历史格式差异还剩 41 个文件，如实记在 DESIGN.md §4.1 —— 重排应当单独一次提交。
 
 并行流的执行模型是本库自己的，因为**拉取式管道里的源根本不可切分**（阶段只是"给我下一个
 元素"的闭包，没有 `Spliterator.trySplit()` 那种信息），所以没有照抄 ForkJoinPool 那条路：
@@ -213,7 +216,7 @@ the behaviour was verified against a real JDK, and the milestone plan.
 
 ## Status
 
-`M0`–`M11` are complete: **242 test cases / 1491 assertions**, all passing in
+`M0`–`M11` are complete: **242 test cases / 1490 assertions**, all passing in
 Debug, `-Werror` and ASan+UBSan configurations, plus 5 compile-failure tests
 registered with CTest. The library builds with `-fno-rtti` too.
 
@@ -255,7 +258,11 @@ registered with CTest. The library builds with `-fno-rtti` too.
   `tests/testDescendingViews.cpp`. The descending work was additionally checked by
   diffing a 777-line set transcript and a 606-line map transcript generated from
   both this library and the JDK, byte for byte.
-- `Lists` / `Sets` / `Maps` factories, and three runnable examples.
+- `Lists` / `Sets` / `Maps` factories, and four runnable examples.
+- Tooling hygiene: `clang-tidy` (the full `bugprone-` / `modernize-` / `performance-` /
+  `readability-` set) reports **zero warnings** across all 34 headers and all 25 test/example
+  translation units. Around 41 files still disagree with `.clang-format`, recorded honestly in
+  DESIGN.md section 4.1 -- a reformat should be its own commit.
 
 The parallel execution model is this library's own, because **a pull pipeline's
 source cannot be split** -- a stage is just a "give me the next element" closure,

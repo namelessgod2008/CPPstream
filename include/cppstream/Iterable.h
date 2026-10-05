@@ -75,8 +75,8 @@ public:
     /// Comparing against the sentinel is what drives range-for and the ranges
     /// algorithms. Only this direction is written; C++20 rewrites `sentinel == iter`
     /// and both `!=` forms from it.
-    [[nodiscard]] friend bool operator==(
-        const ReadOnlyIterator& iter, ReadOnlySentinel) noexcept {
+    [[nodiscard]] friend bool operator==(const ReadOnlyIterator& iter,
+                                         ReadOnlySentinel /*sentinel*/) noexcept {
         return iter.inner_.get() == nullptr;
     }
 
@@ -138,7 +138,7 @@ public:
     }
 
     /// The sentinel half of the range. A distinct type, see ReadOnlySentinel.
-    [[nodiscard]] ReadOnlySentinel end() const noexcept { return ReadOnlySentinel(); }
+    [[nodiscard]] ReadOnlySentinel end() const noexcept { return {}; }
 };
 
 }  // namespace cppstream

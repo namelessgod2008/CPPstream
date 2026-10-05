@@ -7,6 +7,7 @@
 
 #include <chrono>
 #include <cstdint>
+#include <exception>
 #include <iostream>
 #include <string>
 
@@ -35,7 +36,7 @@ using Clock = std::chrono::steady_clock;
 
 }  // namespace
 
-int main() {
+int run() {
     std::cout << "shared pool size: " << cppstream::parallelism() << '\n';
 
     printSection("the same pipeline, sequentially and in parallel");
@@ -94,4 +95,16 @@ int main() {
         std::cout << value << ' ';
     }
     std::cout << '\n';
+    return 0;
+}
+
+/// Turns any escaping exception into a message and a non-zero exit code, so that a
+/// demo run by hand never dies through std::terminate.
+int main() {
+    try {
+        return run();
+    } catch (const std::exception& error) {
+        std::cerr << error.what() << '\n';
+        return 1;
+    }
 }

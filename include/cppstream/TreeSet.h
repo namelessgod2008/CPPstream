@@ -806,6 +806,9 @@ private:
     [[nodiscard]] TreeSetRangeView makeSubWindowFor(const std::optional<T>& fromElement,
         bool fromInclusive, const std::optional<T>& toElement, bool toInclusive) const {
         if (descending_) {
+            // The reversal is the point: the two bounds have to come out stored
+            // ascending whichever way this view walks. See the note above.
+            // NOLINTNEXTLINE(readability-suspicious-call-argument)
             return makeSubWindow(toElement, toInclusive, fromElement, fromInclusive);
         }
         return makeSubWindow(fromElement, fromInclusive, toElement, toInclusive);

@@ -8,12 +8,13 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <exception>
 #include <iostream>
 #include <string>
 #include <utility>
 #include <vector>
 
-int main() {
+int run() {
     const std::vector<std::string> text{
         "the", "quick", "brown", "fox", "jumps", "over",
         "the", "lazy",  "dog",   "the", "fox",   "jumps",
@@ -50,7 +51,7 @@ int main() {
     const cppstream::HashMap<std::string, std::int64_t> again =
         cppstream::Stream<std::string>::of(text).distinct().collect(
             cppstream::Collectors::toMap<std::string>(
-                [&counts](const std::string& word) { return word; },
+                [](const std::string& word) { return word; },
                 [&counts](const std::string& word) { return *counts.get(word); }));
     std::cout << "\ntoMap agrees with groupingBy: " << (counts.equals(again) ? "yes" : "no") << '\n';
 
@@ -60,4 +61,15 @@ int main() {
                                      .collect(cppstream::Collectors::joining<std::string>(" ", "<", ">"));
     std::cout << sentence << '\n';
     return 0;
+}
+
+/// Turns any escaping exception into a message and a non-zero exit code, so that a
+/// demo run by hand never dies through std::terminate.
+int main() {
+    try {
+        return run();
+    } catch (const std::exception& error) {
+        std::cerr << error.what() << '\n';
+        return 1;
+    }
 }

@@ -7,6 +7,7 @@
 #include <cppstream/cppstream.h>
 
 #include <deque>
+#include <exception>
 #include <iostream>
 #include <ranges>
 #include <string>
@@ -35,8 +36,7 @@ void printInts(const cppstream::Collection<int>& values)
 
 }  // namespace
 
-int main()
-{
+int run() {
     printSection("ArrayDeque is a queue, a stack and a deque");
     cppstream::ArrayDeque<std::string> tasks;
     static_cast<void>(tasks.offer("build"));
@@ -202,4 +202,16 @@ int main()
     printInts(cppstream::Stream<int>::ofRange(numbers)
                   .sorted(cppstream::Comparator<int>::naturalOrder())
                   .toList());
+    return 0;
+}
+
+/// Turns any escaping exception into a message and a non-zero exit code, so that a
+/// demo run by hand never dies through std::terminate.
+int main() {
+    try {
+        return run();
+    } catch (const std::exception& error) {
+        std::cerr << error.what() << '\n';
+        return 1;
+    }
 }

@@ -216,7 +216,7 @@ TEST_CASE("parallel reduce, min, max and sum equal the sequential run") {
         CHECK(Stream<int>::range(0, count).parallel().reduce(5, add) ==
               Stream<int>::range(0, count).reduce(5, add));
 
-        const auto scattered = [count](int value) { return (value * 37) % 100; };
+        const auto scattered = [](int value) { return (value * 37) % 100; };
         const auto sequentialMin = Stream<int>::range(0, count).map(scattered).min(comparator);
         const auto sequentialMax = Stream<int>::range(0, count).map(scattered).max(comparator);
         const auto parallelMin =

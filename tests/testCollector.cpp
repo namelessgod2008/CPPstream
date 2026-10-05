@@ -66,6 +66,7 @@ TEST_CASE("collect is a terminal operation and consumes the stream")
 
     // The pipeline was moved out by the first call, exactly as Java's streams
     // behave after a terminal operation.
+    // NOLINTNEXTLINE(bugprone-use-after-move): reusing the moved-from stream is the point.
     CHECK_THROWS_AS(static_cast<void>(std::move(stream).collect(summingCollector())),
         cppstream::IllegalStateException);
 }

@@ -67,12 +67,8 @@ public:
     }
 
     [[nodiscard]] bool containsValue(const V& value) const override {
-        for (const auto& entry : entries_) {
-            if (elementEquals(entry.second, value)) {
-                return true;
-            }
-        }
-        return false;
+        return std::ranges::any_of(
+            entries_, [&value](const auto& entry) { return elementEquals(entry.second, value); });
     }
 
     [[nodiscard]] const V* get(const K& key) const override {
@@ -808,6 +804,9 @@ private:
     [[nodiscard]] TreeMapRangeView makeSubWindowFor(const K& fromKey, bool fromInclusive,
         const K& toKey, bool toInclusive) const {
         if (descending_) {
+            // The reversal is the point: the two bounds have to come out stored
+            // ascending whichever way this view walks. See the note above.
+            // NOLINTNEXTLINE(readability-suspicious-call-argument)
             return makeSubWindow(toKey, toInclusive, fromKey, fromInclusive);
         }
         return makeSubWindow(fromKey, fromInclusive, toKey, toInclusive);
@@ -1191,9 +1190,9 @@ public:
     [[nodiscard]] int modCount() const noexcept override { return window_.modCount(); }
 
     /// Java: TreeMap.KeySet.add, which throws.
-    bool add(const K&) override { throw unsupported(); }
+    bool add(const K& /*key*/) override { throw unsupported(); }
 
-    bool add(K&&) override { throw unsupported(); }
+    bool add(K&& /*key*/) override { throw unsupported(); }
 
     /// Java: KeySet.remove(key), which removes the *mapping*, not merely the key.
     bool remove(const K& key) override { return window_.remove(key).isPresent(); }
@@ -1393,6 +1392,9 @@ public:
 
 private:
     static UnsupportedOperationException unsupported() {
+        // The exception constructors are explicit, so the braced form this check
+        // wants is `return {X(...)}`, which readability-trailing-comma then rejects.
+        // NOLINTNEXTLINE(modernize-return-braced-init-list)
         return UnsupportedOperationException("keySet does not support add; put a mapping instead");
     }
 

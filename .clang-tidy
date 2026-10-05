@@ -43,6 +43,15 @@ CheckOptions:
     value: camelBack
   - key: readability-identifier-naming.PrivateMemberSuffix
     value: '_'
+  # The container layer shares modCount_/frozen_ with its subclasses, so those
+  # members are protected rather than private. readability-identifier-naming
+  # falls back to MemberCase (and to an empty suffix) for ProtectedMember*, so
+  # the convention has to be repeated here or every protected member is a
+  # finding.
+  - key: readability-identifier-naming.ProtectedMemberCase
+    value: camelBack
+  - key: readability-identifier-naming.ProtectedMemberSuffix
+    value: '_'
   - key: readability-identifier-naming.ConstexprVariableCase
     value: camelBack
   - key: readability-identifier-naming.GlobalConstantCase

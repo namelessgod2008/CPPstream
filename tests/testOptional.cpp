@@ -215,7 +215,7 @@ TEST_CASE("Optional and std::optional convert in both directions")
 
     const std::optional<int> unwrapped = wrapped;
     REQUIRE(unwrapped.has_value());
-    CHECK(*unwrapped == 5);
+    CHECK(unwrapped == std::optional<int>(5));
 
     CHECK(wrapped.unwrap() == stdValue);
     CHECK(cppstream::Optional<int>::fromStd(stdValue).get() == 5);

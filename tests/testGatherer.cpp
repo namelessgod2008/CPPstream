@@ -65,8 +65,9 @@ TEST_CASE("fold emits exactly one element, and emits it even for an empty stream
     CHECK(folded == std::vector<int>({10}));
 
     CHECK(cppstream::Stream<int>::empty()
-              .gather(cppstream::Gatherers::fold<int, std::string>(std::string("empty"),
-                  [](std::string total, const int& value) {
+              .gather(cppstream::Gatherers::fold<int, std::string>(
+                  std::string("empty"),
+                  [](const std::string& total, const int& value) {
                       return total + std::to_string(value);
                   }))
               .findFirst()
@@ -189,5 +190,6 @@ TEST_CASE("a consumed stream cannot be gathered again")
     auto pipeline = std::move(stream).gather(cppstream::Gatherers::windowFixed<int>(2));
 
     CHECK(std::move(pipeline).count() == 2);
+    // NOLINTNEXTLINE(bugprone-use-after-move): reusing the moved-from pipeline is the point.
     CHECK_THROWS_AS(static_cast<void>(std::move(pipeline).count()), cppstream::IllegalStateException);
 }

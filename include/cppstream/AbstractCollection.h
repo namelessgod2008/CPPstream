@@ -3,6 +3,7 @@
 #include <cppstream/Collection.h>
 #include <cppstream/Elements.h>
 
+#include <algorithm>
 #include <cstddef>
 #include <functional>
 #include <memory>
@@ -30,12 +31,8 @@ public:
     [[nodiscard]] bool isEmpty() const override { return this->size() == 0; }
 
     [[nodiscard]] bool contains(const T& element) const override {
-        for (const T& candidate : *this) {
-            if (elementEquals(candidate, element)) {
-                return true;
-            }
-        }
-        return false;
+        return std::ranges::any_of(
+            *this, [&element](const T& candidate) { return elementEquals(candidate, element); });
     }
 
     bool remove(const T& element) override {
@@ -50,12 +47,8 @@ public:
     }
 
     [[nodiscard]] bool containsAll(const Collection<T>& other) const override {
-        for (const T& candidate : other) {
-            if (!contains(candidate)) {
-                return false;
-            }
-        }
-        return true;
+        return std::ranges::all_of(other,
+                                   [this](const T& candidate) { return contains(candidate); });
     }
 
     bool addAll(const Collection<T>& other) override {

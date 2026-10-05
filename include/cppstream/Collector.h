@@ -1,7 +1,9 @@
 #pragma once
 
+#include <algorithm>
 #include <concepts>
 #include <cstddef>
+#include <cstdint>
 #include <functional>
 #include <initializer_list>
 #include <type_traits>
@@ -18,7 +20,7 @@ namespace cppstream {
 /// ever asks whether an accumulator is concurrent-safe, and no pipeline ever drops
 /// encounter order. `identityFinish` is meaningful -- it says the finisher returns
 /// its argument unchanged, so a caller may skip it and move the accumulator.
-enum class Characteristics { concurrent, unordered, identityFinish };
+enum class Characteristics : std::uint8_t { concurrent, unordered, identityFinish };
 
 /// A port of java.util.stream.Collector.
 ///
@@ -79,12 +81,9 @@ public:
 
     /// Java: Collector.characteristics().contains(c).
     [[nodiscard]] bool has(Characteristics characteristic) const noexcept {
-        for (Characteristics candidate : characteristics_) {
-            if (candidate == characteristic) {
-                return true;
-            }
-        }
-        return false;
+        return std::ranges::any_of(characteristics_, [characteristic](Characteristics candidate) {
+            return candidate == characteristic;
+        });
     }
 
 private:

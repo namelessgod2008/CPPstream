@@ -6,6 +6,7 @@
 #include <cppstream/cppstream.h>
 
 #include <cstdint>
+#include <exception>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -18,7 +19,7 @@ void printSection(const std::string& title) {
 
 }  // namespace
 
-int main() {
+int run() {
     const std::vector<int> numbers{5, 3, 8, 1, 9, 3, 7, 2};
 
     printSection("map / filter / sorted");
@@ -84,10 +85,23 @@ int main() {
     cppstream::Stream<int> consumed = cppstream::Stream<int>::of({1, 2, 3});
     std::cout << std::move(consumed).count() << " then ";
     try {
+        // The second consumption is the point of the section.
+        // NOLINTNEXTLINE(bugprone-use-after-move)
         std::cout << std::move(consumed).count();
     } catch (const cppstream::IllegalStateException& error) {
         std::cout << error.what();
     }
     std::cout << '\n';
     return 0;
+}
+
+/// Turns any escaping exception into a message and a non-zero exit code, so that a
+/// demo run by hand never dies through std::terminate.
+int main() {
+    try {
+        return run();
+    } catch (const std::exception& error) {
+        std::cerr << error.what() << '\n';
+        return 1;
+    }
 }

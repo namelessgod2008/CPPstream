@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstdint>
+
 // Forward declarations for every public name in the library, so that a
 // translation unit can refer to the types without pulling in the headers.
 //
@@ -108,8 +110,9 @@ class Optional;
 template <class T>
 class Comparator;
 
-template <class T, class Compare>
-[[nodiscard]] Comparator<T> comparatorFrom(const Compare& compare);
+// comparatorFrom() is deliberately not declared here. It is a function template,
+// so a caller needs its definition, never merely a declaration -- and the
+// declaration would be a second one in every TU that also includes Comparator.h.
 
 template <class T, class A, class R>
 class Collector;
@@ -120,7 +123,7 @@ class Downstream;
 template <class T, class A, class R>
 class Gatherer;
 
-enum class Characteristics;
+enum class Characteristics : std::uint8_t;
 
 class Collectors;
 class Gatherers;
