@@ -1,0 +1,69 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A newer push to the same branch makes the older run redundant.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Debug
+            build_type: Debug
+            options: ""
+          - name: Release
+            build_type: Release
+            options: ""
+          - name: Warnings as errors
+            build_type: Debug
+            options: "-DCPPSTREAM_WARNINGS_AS_ERRORS=ON"
+          - name: ASan + UBSan
+            build_type: Debug
+            options: "-DCPPSTREAM_ENABLE_SANITIZERS=ON"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # The library is developed and verified against GCC 16, which is newer than
+      # the one Ubuntu 24.04 ships, so take it from the toolchain PPA.
+      - name: Install GCC 16, CMake and Ninja
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends software-properties-common
+          sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends g++-16 cmake ninja-build
+
+      - name: Show toolchain versions
+        run: |
+          g++-16 --version | head -1
+          cmake --version | head -1
+          ninja --version
+
+      - name: Configure
+        run: >
+          cmake -S . -B build -G Ninja
+          -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+          -DCMAKE_CXX_COMPILER=g++-16
+          ${{ matrix.options }}
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure

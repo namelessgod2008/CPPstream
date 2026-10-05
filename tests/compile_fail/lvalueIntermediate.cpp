@@ -10,3 +10,5 @@ int main() {
     cppstream::Stream<int> filtered = stream.filter([](int value) { return value > 1; });
     (void)filtered;
 }
+
+// EXPECTED-ERROR-LINE: 10

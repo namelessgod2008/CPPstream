@@ -9,3 +9,5 @@ int main() {
     const std::int64_t total = stream.count();
     (void)total;
 }
+
+// EXPECTED-ERROR-LINE: 9

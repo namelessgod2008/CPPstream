@@ -12,3 +12,5 @@ int main() {
                       .collect(cppstream::Collectors::toList<std::string>());
     (void)result;
 }
+
+// EXPECTED-ERROR-LINE: 12

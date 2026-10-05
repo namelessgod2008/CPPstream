@@ -9,3 +9,5 @@ int main() {
     cppstream::Stream<int> copy = original;
     (void)copy;
 }
+
+// EXPECTED-ERROR-LINE: 9

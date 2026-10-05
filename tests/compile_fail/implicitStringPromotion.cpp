@@ -12,3 +12,5 @@ int main() {
     auto stream = cppstream::Stream<std::string>::of("a", "b");
     (void)stream;
 }
+
+// EXPECTED-ERROR-LINE: 12

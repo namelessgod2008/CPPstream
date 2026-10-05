@@ -62,8 +62,10 @@ CppStream/
 ├── README.md
 ├── .clang-format
 ├── .clang-tidy
+├── .github/workflows/ci.yml # GitHub Actions：Debug / Release / -Werror / ASan+UBSan
 ├── cmake/
-│   └── CppStreamWarnings.cmake
+│   ├── CppStreamWarnings.cmake
+│   └── RunCompileFailTest.cmake # 编译失败用例的判定脚本（替代 WILL_FAIL）
 ├── include/cppstream/
 │   ├── cppstream.h          # 唯一推荐入口（umbrella）
 │   ├── cppstream_fwd.h      # 前向声明集合
@@ -112,7 +114,7 @@ CppStream/
 │   ├── testCollector.cpp / testCollectors.cpp / testGatherer.cpp
 │   ├── testRanges.cpp       # sizeHint 与 std::ranges 互操作
 │   ├── testUtilities.cpp
-│   ├── compile_fail/        # 5 个编译失败用例，WILL_FAIL 接入 CTest
+│   ├── compile_fail/        # 5 个编译失败用例，各带 EXPECTED-ERROR-LINE 标记
 │   └── jdk/                 # 打印 JDK 行为的探针，测试期望值的来源
 │       ├── RangeViewProbe.java      # 范围视图的栅栏规则
 │       ├── DescendingProbe.java     # descendingSet / descendingMap 全量行为
@@ -153,7 +155,8 @@ option(CPPSTREAM_ENABLE_SANITIZERS "ASan + UBSan"       OFF)
 
 - **INTERFACE（header-only）**：模板密集的库做成静态库需要显式实例化，收益不抵复杂度。缺点是用例编译时间偏长，用 `examples` 的编译时间来监控。
 - 警告列表单独放进 `cppstream_warnings` INTERFACE target，只挂到 tests/examples 上，不污染使用者：`-Wall -Wextra -Wpedantic -Wconversion -Wshadow -Wold-style-cast -Wnon-virtual-dtor`。`-Wnon-virtual-dtor` 对本库尤其重要（虚基类层级）。
-- 测试用 `include(CTest)` + 普通 `add_test`，不用 `doctest_discover_tests`（后者依赖 doctest 仓库的 CMake 模块；vendor 单头文件时可以直接 `add_test(NAME cppstream_tests COMMAND cppstream_tests)`，CLion 里点运行按钮的体验更好）。
+- 测试用 `enable_testing()` + 普通 `add_test`，不用 `doctest_discover_tests`（后者依赖 doctest 仓库的 CMake 模块；vendor 单头文件时可以直接 `add_test(NAME cppstream_tests COMMAND cppstream_tests)`，CLion 里点运行按钮的体验更好）。主套件挂 `TIMEOUT 600` + `LABELS unit`，每个编译失败用例挂 `TIMEOUT 60` + `LABELS compile-fail`，一个用例挂死不会拖住整个套件。
+- 编译失败用例**不用** CTest 的 `WILL_FAIL`：它接受任何非零退出，于是编译器缺失、头文件路径写坏、源文件改名都会被当成"通过"。改用 `cmake/RunCompileFailTest.cmake` 逐例判定：每个用例在源码末尾用 `// EXPECTED-ERROR-LINE: N` 声明"错误应当报在这一行"，脚本要求编译器确实在该文件的该行给出 `error:`，并拒收来自 `fatal error` / `No such file or directory` 的失败。未经授权的"意外通过"因此会真的红。
 - Sanitizer 打开时额外挂 `-fsanitize=address,undefined -fno-omit-frame-pointer`。
 
 ### 4.1 clang-format / clang-tidy（CLion 自带，无需安装）
@@ -862,7 +865,7 @@ Java 把它们挂在 `Stream` / `IntStream` 接口的静态方法上；C++ 的�
 - **语义测试优先于数值测试**：`peek` 的调用次数、`filter` 是否被短路、`findFirst` 在无限流上是否返回、`distinct` 是否保持首次出现顺序、`groupingBy` 的分组是否保持插入顺序。这些才是复刻的核心。
 - **惰性测试**：用 `CountingSource`（记录实际拉取次数的源）断言"中间操作不终结就一个元素都不拉"。这比用 `peek` 计数更强：它证明的是源都没被碰过。
 - **异常测试**：`IllegalStateException`（重复消费）、`NoSuchElementException`（空 `Optional::get`）、`ConcurrentModificationException`（迭代中修改）、`UnsupportedOperationException`（冻结列表修改）。
-- **编译失败测试**：把几种误用喂给编译器并断言编译失败，是证明"编译期单次消费"真的生效的唯一办法。已在 M2 手工验证通过的三种：lvalue 上调中间操作、lvalue 上调终结操作、拷贝构造。M6 把它们接进 CTest。
+- **编译失败测试**：把几种误用喂给编译器并断言编译失败，是证明"编译期单次消费"真的生效的唯一办法。已在 M2 手工验证通过的三种：lvalue 上调中间操作、lvalue 上调终结操作、拷贝构造。M6 把它们接进 CTest；M11 之后判定改由 `cmake/RunCompileFailTest.cmake` 承担（见 §4）：用例用 `// EXPECTED-ERROR-LINE: N` 指出错误该落在哪一行，脚本核实该行确有 `error:`，并拒绝把"路径写坏"之类的失败算作通过。
 - **三个配置每次都跑**：默认 Debug、`CPPSTREAM_WARNINGS_AS_ERRORS=ON`、`CPPSTREAM_ENABLE_SANITIZERS=ON`。Sanitizer 从 M0 就开着，不等 Collection 层——早开早暴露。
 - **活视图的测试按"有没有真的走同一份存储"来写**：不只看返回值对不对，而是"通过视图写进去，从原容器读出来"，以及反向。视图迭代器还要断言"背着我改原容器必须 fail-fast"。
 - **有序范围视图的期望值来自 JDK 实测**：`NavigableSubMap` 的栅栏规则（新栅栏能否放宽窗口、查找是否夹到窗口内、`computeIfPresent` 在窗口外动不动底层映射）在 javadoc 里写得很含糊，靠猜必错。做法是写一个等价的 Java 程序打印这些边界的输出，再把同一组用例翻译成 C++ 断言放进 `testRangeViews.cpp`——`floor(100)` 返回窗口末元素、`[20,40)` 上 `headSet(40,true)` 抛而 `headSet(40,false)` 可以、`computeIfPresent` 窗口外返回 null 且不改动映射，几条都是这样定下来的（`computeIfPresent` 那条直接修掉了一个真 bug，见 §6.8）。探针源文件留在 `tests/jdk/RangeViewProbe.java`，`javac RangeViewProbe.java && java RangeViewProbe` 即可复跑（实测环境 GraalVM 25.2.4）。
@@ -1010,7 +1013,7 @@ M8 与 M9 里**并行流明确不做**（第 8 条当时固化为"声明但抛"�
 
 - `Lists.h` / `Sets.h` / `Maps.h`：Java 接口上的静态工厂搬到工具类（§8 第 6 条），一律返回冻结容器。
 - `examples/pipelineTour.cpp`、`examples/wordFrequency.cpp`：可运行，覆盖惰性、短路、无限源、分组、teeing 与容器互操作。
-- 5 个编译失败用例接入 CTest（`WILL_FAIL` + `-fsyntax-only`）：lvalue 调中间操作、lvalue 调终结操作、拷贝 `Stream`、收集器元素类型不匹配、`const char*` 不被提升为 `std::string`。
+- 5 个编译失败用例接入 CTest（当时用 `WILL_FAIL` + `-fsyntax-only`，后来换成更严格的 `RunCompileFailTest.cmake`，见 §4 / §9）：lvalue 调中间操作、lvalue 调终结操作、拷贝 `Stream`、收集器元素类型不匹配、`const char*` 不被提升为 `std::string`。
 
 **测试规模（M7 结束时）**：132 个 `TEST_CASE` / 613 条断言 + 6 个 CTest 用例（1 个冒烟 + 5 个编译失败），三种配置（Debug、`-Werror`、ASan+UBSan）全部通过。`-Werror` 配置是真正的守门人：`-Wconversion` / `-Wshadow` / `-Wold-style-cast` 等在这轮里抓出了多处 `size_t` ↔ `int` 隐式转换。
 
