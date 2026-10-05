@@ -147,8 +147,7 @@ public:
 
     /// The const overload: a read-only view, because there is nothing to write
     /// through to.
-    [[nodiscard]] std::unique_ptr<ListView<T>> subList(
-        int fromIndex, int toIndex) const override {
+    [[nodiscard]] std::unique_ptr<ListView<T>> subList(int fromIndex, int toIndex) const override {
         return std::make_unique<ListView<T>>(std::as_const(*this), fromIndex, toIndex);
     }
 
@@ -159,16 +158,15 @@ public:
             return false;
         }
         values_.insert(values_.begin() + static_cast<std::ptrdiff_t>(position), incoming.begin(),
-            incoming.end());
+                       incoming.end());
         ++this->modCount_;
         return true;
     }
 
     void sort(const Comparator<T>& comparator) override {
-        std::sort(values_.begin(), values_.end(),
-            [&comparator](const T& left, const T& right) {
-                return comparator.compare(left, right) < 0;
-            });
+        std::sort(values_.begin(), values_.end(), [&comparator](const T& left, const T& right) {
+            return comparator.compare(left, right) < 0;
+        });
         ++this->modCount_;
     }
 
@@ -297,7 +295,7 @@ private:
         template <class U>
         void insertAt(int index, U&& element) {
             owner_->values_.insert(owner_->values_.begin() + static_cast<std::ptrdiff_t>(index),
-                std::forward<U>(element));
+                                   std::forward<U>(element));
             ++owner_->modCount_;
             expectedModCount_ = owner_->modCount_;
             ++cursor_;

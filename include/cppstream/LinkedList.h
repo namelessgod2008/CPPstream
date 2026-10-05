@@ -146,8 +146,7 @@ public:
         return std::make_unique<ListView<T>>(*this, fromIndex, toIndex);
     }
 
-    [[nodiscard]] std::unique_ptr<ListView<T>> subList(
-        int fromIndex, int toIndex) const override {
+    [[nodiscard]] std::unique_ptr<ListView<T>> subList(int fromIndex, int toIndex) const override {
         return std::make_unique<ListView<T>>(std::as_const(*this), fromIndex, toIndex);
     }
 
@@ -300,7 +299,9 @@ public:
     class LinkedListIterator final : public ListIterator<T> {
     public:
         LinkedListIterator(LinkedList& owner, int index)
-            : owner_(&owner), current_(std::next(owner.nodes_.begin(), index)), index_(index),
+            : owner_(&owner),
+              current_(std::next(owner.nodes_.begin(), index)),
+              index_(index),
               expectedModCount_(owner.modCount_) {}
 
         [[nodiscard]] bool hasNext() const override { return index_ < owner_->size(); }

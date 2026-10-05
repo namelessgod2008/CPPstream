@@ -53,12 +53,12 @@ int run() {
             cppstream::Collectors::toMap<std::string>(
                 [](const std::string& word) { return word; },
                 [&counts](const std::string& word) { return *counts.get(word); }));
-    std::cout << "\ntoMap agrees with groupingBy: " << (counts.equals(again) ? "yes" : "no") << '\n';
+    std::cout << "\ntoMap agrees with groupingBy: " << (counts.equals(again) ? "yes" : "no")
+              << '\n';
 
     // joining, with prefix and suffix, over the distinct words in order.
-    const std::string sentence = cppstream::Stream<std::string>::of(text)
-                                     .distinct()
-                                     .collect(cppstream::Collectors::joining<std::string>(" ", "<", ">"));
+    const std::string sentence = cppstream::Stream<std::string>::of(text).distinct().collect(
+        cppstream::Collectors::joining<std::string>(" ", "<", ">"));
     std::cout << sentence << '\n';
     return 0;
 }

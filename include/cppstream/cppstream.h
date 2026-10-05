@@ -38,9 +38,9 @@ inline constexpr bool hasOptionalMonadic = false;
 #endif
 
 static_assert(hasMoveOnlyFunction,
-    "CppStream requires std::move_only_function (C++23). Compile with C++23 enabled.");
+              "CppStream requires std::move_only_function (C++23). Compile with C++23 enabled.");
 static_assert(hasOptionalMonadic,
-    "CppStream requires the C++23 monadic operations on std::optional.");
+              "CppStream requires the C++23 monadic operations on std::optional.");
 
 }  // namespace cppstream
 
@@ -69,26 +69,26 @@ static_assert(hasOptionalMonadic,
 // Collection.h needs Stream.h for the complete return type of stream(), and
 // List.h needs AbstractCollection.h, so this order is load-bearing.
 
-#include <cppstream/Collector.h>
-#include <cppstream/Iterator.h>
-#include <cppstream/Iterable.h>
-#include <cppstream/Collection.h>
 #include <cppstream/AbstractCollection.h>
-#include <cppstream/List.h>
-#include <cppstream/Queue.h>
-#include <cppstream/Deque.h>
-#include <cppstream/Set.h>
 #include <cppstream/AbstractSet.h>
-#include <cppstream/HashSet.h>
-#include <cppstream/TreeSet.h>
-#include <cppstream/Map.h>
-#include <cppstream/HashMap.h>
-#include <cppstream/TreeMap.h>
-#include <cppstream/ArrayList.h>
-#include <cppstream/LinkedList.h>
 #include <cppstream/ArrayDeque.h>
+#include <cppstream/ArrayList.h>
+#include <cppstream/Collection.h>
+#include <cppstream/Collector.h>
 #include <cppstream/Collectors.h>
+#include <cppstream/Deque.h>
 #include <cppstream/Gatherers.h>
+#include <cppstream/HashMap.h>
+#include <cppstream/HashSet.h>
+#include <cppstream/Iterable.h>
+#include <cppstream/Iterator.h>
+#include <cppstream/LinkedList.h>
+#include <cppstream/List.h>
 #include <cppstream/Lists.h>
-#include <cppstream/Sets.h>
+#include <cppstream/Map.h>
 #include <cppstream/Maps.h>
+#include <cppstream/Queue.h>
+#include <cppstream/Set.h>
+#include <cppstream/Sets.h>
+#include <cppstream/TreeMap.h>
+#include <cppstream/TreeSet.h>

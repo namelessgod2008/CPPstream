@@ -6,8 +6,7 @@
 #include <string>
 #include <vector>
 
-TEST_CASE("put returns the previous value as an Optional")
-{
+TEST_CASE("put returns the previous value as an Optional") {
     cppstream::HashMap<std::string, int> ages;
 
     // Java's null-as-absent becomes an empty Optional.
@@ -19,8 +18,7 @@ TEST_CASE("put returns the previous value as an Optional")
     CHECK(ages.get(std::string("missing")) == nullptr);
 }
 
-TEST_CASE("get hands out a writable pointer for existing keys")
-{
+TEST_CASE("get hands out a writable pointer for existing keys") {
     cppstream::HashMap<std::string, int> ages;
     ages.put(std::string("ada"), 36);
 
@@ -34,8 +32,7 @@ TEST_CASE("get hands out a writable pointer for existing keys")
     CHECK(view.get(std::string("nobody")) == nullptr);
 }
 
-TEST_CASE("putIfAbsent leaves the existing mapping alone")
-{
+TEST_CASE("putIfAbsent leaves the existing mapping alone") {
     cppstream::HashMap<std::string, int> ages;
     ages.put(std::string("ada"), 36);
 
@@ -46,8 +43,7 @@ TEST_CASE("putIfAbsent leaves the existing mapping alone")
     CHECK(*ages.get(std::string("alan")) == 41);
 }
 
-TEST_CASE("getOrDefault and remove")
-{
+TEST_CASE("getOrDefault and remove") {
     cppstream::HashMap<std::string, int> ages;
     ages.put(std::string("ada"), 36);
 
@@ -59,45 +55,51 @@ TEST_CASE("getOrDefault and remove")
     CHECK(ages.isEmpty());
 }
 
-TEST_CASE("computeIfAbsent, computeIfPresent and merge")
-{
+TEST_CASE("computeIfAbsent, computeIfPresent and merge") {
     cppstream::HashMap<std::string, int> counts;
 
     // computeIfAbsent hands back a copy of the installed value, exactly as Java's
     // does, so bind it by value rather than holding a reference into a temporary.
-    const int installed = counts
-                              .computeIfAbsent(std::string("a"),
-                                  [](const std::string&) { return cppstream::Optional<int>::of(1); })
-                              .get();
+    const int installed =
+        counts
+            .computeIfAbsent(std::string("a"),
+                             [](const std::string&) { return cppstream::Optional<int>::of(1); })
+            .get();
     CHECK(installed == 1);
 
     // A mapping function that returns an empty Optional declines to install, which
     // is Java's `return null`.
     counts.computeIfAbsent(std::string("b"),
-        [](const std::string&) { return cppstream::Optional<int>::empty(); });
+                           [](const std::string&) { return cppstream::Optional<int>::empty(); });
     CHECK_FALSE(counts.containsKey(std::string("b")));
 
-    counts.computeIfPresent(std::string("a"),
-        [](const std::string&, const int& current) { return cppstream::Optional<int>::of(current + 10); });
+    counts.computeIfPresent(std::string("a"), [](const std::string&, const int& current) {
+        return cppstream::Optional<int>::of(current + 10);
+    });
     CHECK(*counts.get(std::string("a")) == 11);
 
     // Returning empty removes the entry, as Java does.
-    counts.computeIfPresent(std::string("a"),
-        [](const std::string&, const int&) { return cppstream::Optional<int>::empty(); });
+    counts.computeIfPresent(std::string("a"), [](const std::string&, const int&) {
+        return cppstream::Optional<int>::empty();
+    });
     CHECK_FALSE(counts.containsKey(std::string("a")));
 
-    CHECK(counts.merge(std::string("c"), 5, [](const int& left, const int& right) { return left + right; })
+    CHECK(counts
+              .merge(std::string("c"), 5,
+                     [](const int& left, const int& right) { return left + right; })
               .get() == 5);
-    CHECK(counts.merge(std::string("c"), 5, [](const int& left, const int& right) { return left + right; })
+    CHECK(counts
+              .merge(std::string("c"), 5,
+                     [](const int& left, const int& right) { return left + right; })
               .get() == 10);
-    CHECK(counts.merge(std::string("c"), 5,
-              [](const int&, const int&) { return cppstream::Optional<int>::empty(); })
+    CHECK(counts
+              .merge(std::string("c"), 5,
+                     [](const int&, const int&) { return cppstream::Optional<int>::empty(); })
               .isEmpty());
     CHECK_FALSE(counts.containsKey(std::string("c")));
 }
 
-TEST_CASE("keySet, values and entrySet are live views")
-{
+TEST_CASE("keySet, values and entrySet are live views") {
     cppstream::HashMap<std::string, int> ages;
     ages.put(std::string("ada"), 36);
     ages.put(std::string("alan"), 41);
@@ -129,16 +131,14 @@ TEST_CASE("keySet, values and entrySet are live views")
 
     // add() is not a map operation, so it throws, exactly as in Java.
     CHECK_THROWS_AS(static_cast<void>(keys.add(std::string("late"))),
-        cppstream::UnsupportedOperationException);
-    CHECK_THROWS_AS(static_cast<void>(values.add(1)),
-        cppstream::UnsupportedOperationException);
-    CHECK_THROWS_AS(static_cast<void>(entries.add(cppstream::HashMap<std::string, int>::Entry(
-                        std::string("late"), 1))),
-        cppstream::UnsupportedOperationException);
+                    cppstream::UnsupportedOperationException);
+    CHECK_THROWS_AS(static_cast<void>(values.add(1)), cppstream::UnsupportedOperationException);
+    CHECK_THROWS_AS(static_cast<void>(entries.add(
+                        cppstream::HashMap<std::string, int>::Entry(std::string("late"), 1))),
+                    cppstream::UnsupportedOperationException);
 }
 
-TEST_CASE("Entry exposes getKey, getValue and an independent setValue")
-{
+TEST_CASE("Entry exposes getKey, getValue and an independent setValue") {
     cppstream::HashMap<std::string, int> ages;
     ages.put(std::string("ada"), 36);
 
@@ -159,8 +159,7 @@ TEST_CASE("Entry exposes getKey, getValue and an independent setValue")
     CHECK(*ages.get(std::string("ada")) == 36);
 }
 
-TEST_CASE("Map equality and hashCode follow AbstractMap")
-{
+TEST_CASE("Map equality and hashCode follow AbstractMap") {
     cppstream::HashMap<std::string, int> left;
     left.put(std::string("ada"), 36);
     left.put(std::string("alan"), 41);
@@ -177,8 +176,7 @@ TEST_CASE("Map equality and hashCode follow AbstractMap")
     CHECK_FALSE(left.equals(reordered));
 }
 
-TEST_CASE("forEach hands out writable values")
-{
+TEST_CASE("forEach hands out writable values") {
     cppstream::HashMap<std::string, int> ages;
     ages.put(std::string("ada"), 36);
     ages.put(std::string("alan"), 41);
@@ -189,32 +187,32 @@ TEST_CASE("forEach hands out writable values")
     CHECK(*ages.get(std::string("alan")) == 42);
 }
 
-TEST_CASE("frozen maps refuse every mutation path")
-{
+TEST_CASE("frozen maps refuse every mutation path") {
     cppstream::HashMap<std::string, int> ages;
     ages.put(std::string("ada"), 36);
     ages.freeze();
 
     CHECK(ages.isFrozen());
     CHECK_THROWS_AS(static_cast<void>(ages.put(std::string("alan"), 41)),
-        cppstream::UnsupportedOperationException);
+                    cppstream::UnsupportedOperationException);
     CHECK_THROWS_AS(static_cast<void>(ages.putIfAbsent(std::string("alan"), 41)),
-        cppstream::UnsupportedOperationException);
+                    cppstream::UnsupportedOperationException);
     CHECK_THROWS_AS(static_cast<void>(ages.remove(std::string("ada"))),
-        cppstream::UnsupportedOperationException);
+                    cppstream::UnsupportedOperationException);
     CHECK_THROWS_AS(ages.clear(), cppstream::UnsupportedOperationException);
-    CHECK_THROWS_AS(static_cast<void>(ages.computeIfAbsent(std::string("alan"),
-                      [](const std::string&) { return cppstream::Optional<int>::of(1); })),
-        cppstream::UnsupportedOperationException);
-    CHECK_THROWS_AS(static_cast<void>(ages.merge(std::string("ada"), 1,
-                      [](const int& left, const int& right) { return left + right; })),
+    CHECK_THROWS_AS(static_cast<void>(ages.computeIfAbsent(
+                        std::string("alan"),
+                        [](const std::string&) { return cppstream::Optional<int>::of(1); })),
+                    cppstream::UnsupportedOperationException);
+    CHECK_THROWS_AS(
+        static_cast<void>(ages.merge(
+            std::string("ada"), 1, [](const int& left, const int& right) { return left + right; })),
         cppstream::UnsupportedOperationException);
 
     CHECK(ages.size() == 1);
 }
 
-TEST_CASE("TreeMap iterates in key order and answers navigable queries")
-{
+TEST_CASE("TreeMap iterates in key order and answers navigable queries") {
     cppstream::TreeMap<int, std::string> names;
     names.put(30, std::string("thirty"));
     names.put(10, std::string("ten"));
@@ -235,14 +233,15 @@ TEST_CASE("TreeMap iterates in key order and answers navigable queries")
     CHECK(names.headMap(25).size() == 2);
     CHECK(names.tailMap(20).size() == 2);
 
-    const cppstream::Optional<cppstream::TreeMap<int, std::string>::Entry> polled = names.pollFirstEntry();
+    const cppstream::Optional<cppstream::TreeMap<int, std::string>::Entry> polled =
+        names.pollFirstEntry();
     CHECK(polled.get().getKey() == 10);
     CHECK(names.size() == 2);
     CHECK(names.pollLastEntry().get().getKey() == 30);
     CHECK(names.size() == 1);
 
     CHECK_THROWS_AS(static_cast<void>(cppstream::TreeMap<int, int>{}.firstKey()),
-        cppstream::NoSuchElementException);
+                    cppstream::NoSuchElementException);
 
     // keySet() is a live Set view. Our Set has no SortedSet refinement, so key
     // order is not part of the type -- but it is what the view actually produces,
@@ -252,17 +251,15 @@ TEST_CASE("TreeMap iterates in key order and answers navigable queries")
     CHECK(remaining.toArray() == std::vector<int>{20});
 }
 
-TEST_CASE("maps reject null keys and values for pointer payloads")
-{
+TEST_CASE("maps reject null keys and values for pointer payloads") {
     cppstream::HashMap<int*, int> pointers;
 
     CHECK_THROWS_AS(static_cast<void>(pointers.put(static_cast<int*>(nullptr), 1)),
-        cppstream::NullPointerException);
+                    cppstream::NullPointerException);
     CHECK_FALSE(pointers.containsKey(static_cast<int*>(nullptr)));
 }
 
-TEST_CASE("putAll copies every mapping")
-{
+TEST_CASE("putAll copies every mapping") {
     cppstream::HashMap<std::string, int> source;
     source.put(std::string("ada"), 36);
     source.put(std::string("alan"), 41);
@@ -274,8 +271,7 @@ TEST_CASE("putAll copies every mapping")
     CHECK(*destination.get(std::string("ada")) == 36);
 }
 
-TEST_CASE("TreeMap.descendingMap is a live view of the same map")
-{
+TEST_CASE("TreeMap.descendingMap is a live view of the same map") {
     cppstream::TreeMap<std::string, int> ages{{"amy", 31}, {"bob", 24}, {"cid", 45}};
 
     auto descending = ages.descendingMap();
@@ -310,15 +306,14 @@ TEST_CASE("TreeMap.descendingMap is a live view of the same map")
 
     // Flipping twice gives the ascending walk back, as Java's does.
     CHECK(descending.descendingMap().firstKey() == "amy");
-    CHECK(descending.descendingMap().keySet().toArray()
-        == std::vector<std::string>{"amy", "bob", "cid", "dan", "eve"});
+    CHECK(descending.descendingMap().keySet().toArray() ==
+          std::vector<std::string>{"amy", "bob", "cid", "dan", "eve"});
 
     // Java: DescendingSubMap.comparator() is reverseOrder(m.comparator()).
     CHECK(descending.comparator().compare(std::string("a"), std::string("b")) > 0);
 }
 
-TEST_CASE("TreeMap.Descending is still an independent reversed copy")
-{
+TEST_CASE("TreeMap.Descending is still an independent reversed copy") {
     const cppstream::TreeMap<std::string, int> ages{{"amy", 31}, {"bob", 24}, {"cid", 45}};
 
     cppstream::TreeMap<std::string, int>::Descending copy;
@@ -330,8 +325,7 @@ TEST_CASE("TreeMap.Descending is still an independent reversed copy")
     CHECK(ages.size() == 3);  // the copy is independent storage
 }
 
-TEST_CASE("TreeMap descending views navigate and flip their range methods")
-{
+TEST_CASE("TreeMap descending views navigate and flip their range methods") {
     cppstream::TreeMap<int, int> ages{{10, 1}, {20, 2}, {30, 3}, {40, 4}, {50, 5}};
     auto descending = ages.descendingMap();
 
@@ -355,7 +349,7 @@ TEST_CASE("TreeMap descending views navigate and flip their range methods")
     // The backwards window is rejected with Java's message: "from" is the upper end
     // of a descending window, so 20 below 40 is the backwards one.
     CHECK_THROWS_AS(static_cast<void>(descending.subMap(20, 40)),
-        cppstream::IllegalArgumentException);
+                    cppstream::IllegalArgumentException);
 
     // On a *bounded* descending window an out-of-window fence is rejected, and the
     // message names the descending view's own parameter rather than the ascending
@@ -366,8 +360,7 @@ TEST_CASE("TreeMap descending views navigate and flip their range methods")
     CHECK_THROWS_AS(static_cast<void>(bounded.tailMap(5)), cppstream::IllegalArgumentException);
 }
 
-TEST_CASE("TreeMap.navigableKeySet and descendingKeySet are live NavigableSet views")
-{
+TEST_CASE("TreeMap.navigableKeySet and descendingKeySet are live NavigableSet views") {
     cppstream::TreeMap<int, int> ages{{10, 1}, {20, 2}, {30, 3}};
 
     auto keys = ages.navigableKeySet();
@@ -411,23 +404,22 @@ TEST_CASE("TreeMap.navigableKeySet and descendingKeySet are live NavigableSet vi
     // A key set of a window is bounded, and says so with Java's messages.
     auto window = ages.navigableKeySet().subSet(5, false, 20, true);
     CHECK_THROWS_AS(static_cast<void>(window.headSet(50, true)),
-        cppstream::IllegalArgumentException);
+                    cppstream::IllegalArgumentException);
     CHECK_THROWS_AS(static_cast<void>(window.tailSet(1, true)),
-        cppstream::IllegalArgumentException);
+                    cppstream::IllegalArgumentException);
 }
 
-TEST_CASE("a descending map view taken from a const map is read-only")
-{
+TEST_CASE("a descending map view taken from a const map is read-only") {
     const cppstream::TreeMap<int, int> ages{{1, 10}, {2, 20}};
     auto descending = ages.descendingMap();
 
     CHECK(descending.firstKey() == 2);
     CHECK_THROWS_AS(static_cast<void>(descending.put(3, 30)),
-        cppstream::UnsupportedOperationException);
+                    cppstream::UnsupportedOperationException);
     CHECK_THROWS_AS(static_cast<void>(ages.navigableKeySet().add(3)),
-        cppstream::UnsupportedOperationException);
+                    cppstream::UnsupportedOperationException);
     CHECK_THROWS_AS(static_cast<void>(ages.navigableKeySet().remove(1)),
-        cppstream::UnsupportedOperationException);
+                    cppstream::UnsupportedOperationException);
 
     // Iterating a read-only window is still fine, and so is a sub-window.
     CHECK(descending.subMap(2, true, 1, false).keySet().toArray() == std::vector<int>{2});

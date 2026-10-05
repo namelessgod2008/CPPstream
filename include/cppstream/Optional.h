@@ -210,8 +210,10 @@ public:
     [[nodiscard]] std::optional<T> unwrap() const& { return value_; }
     std::optional<T> unwrap() && { return std::move(value_); }
 
-    operator std::optional<T>() const& { return value_; }              // NOLINT(google-explicit-constructor)
-    operator std::optional<T>() && { return std::move(value_); }       // NOLINT(google-explicit-constructor)
+    operator std::optional<T>() const& { return value_; }  // NOLINT(google-explicit-constructor)
+    operator std::optional<T>() && {
+        return std::move(value_);
+    }  // NOLINT(google-explicit-constructor)
 
     /// Java: Optional.equals(other). CppStream exposes Java's method names
     /// rather than overloading operator==, so that a type never has two

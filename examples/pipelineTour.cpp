@@ -23,11 +23,12 @@ int run() {
     const std::vector<int> numbers{5, 3, 8, 1, 9, 3, 7, 2};
 
     printSection("map / filter / sorted");
-    const cppstream::ArrayList<int> evensSquared = cppstream::Stream<int>::of(numbers)
-                                                       .filter([](int value) { return value % 2 == 0; })
-                                                       .map([](int value) { return value * value; })
-                                                       .sorted()
-                                                       .collect(cppstream::Collectors::toList<int>());
+    const cppstream::ArrayList<int> evensSquared =
+        cppstream::Stream<int>::of(numbers)
+            .filter([](int value) { return value % 2 == 0; })
+            .map([](int value) { return value * value; })
+            .sorted()
+            .collect(cppstream::Collectors::toList<int>());
     for (int value : evensSquared) {
         std::cout << value << ' ';
     }
@@ -37,7 +38,8 @@ int run() {
     const auto byRemainder = cppstream::Stream<int>::of(numbers).collect(
         cppstream::Collectors::groupingBy<int>([](int value) { return value % 3; }));
     for (const auto& entry : byRemainder.entrySet()) {
-        std::cout << "remainder " << entry.getKey() << ": " << entry.getValue().size() << " values\n";
+        std::cout << "remainder " << entry.getKey() << ": " << entry.getValue().size()
+                  << " values\n";
     }
 
     printSection("laziness and short-circuiting");
@@ -54,10 +56,12 @@ int run() {
     printSection("infinite source + takeWhile");
     // Java's 2-argument iterate is unary, so powers of two are the natural fit; a
     // stateful recurrence goes through generate() instead.
-    const std::vector<std::int64_t> powers = cppstream::Stream<std::int64_t>::iterate(
-        std::int64_t{1}, [](std::int64_t value) { return value * 2; })
-                                                 .takeWhile([](std::int64_t value) { return value < 100; })
-                                                 .toArray();
+    const std::vector<std::int64_t> powers =
+        cppstream::Stream<std::int64_t>::iterate(std::int64_t{1}, [](std::int64_t value) {
+            return value * 2;
+        }).takeWhile([](std::int64_t value) {
+              return value < 100;
+          }).toArray();
     for (std::int64_t value : powers) {
         std::cout << value << ' ';
     }
@@ -68,12 +72,14 @@ int run() {
     for (int value : numbers) {
         unique.add(value);
     }
-    std::cout << "sum=" << unique.stream().sum() << " average=" << unique.stream().average().orElse(0.0)
-              << " first=" << unique.first() << " last=" << unique.last() << '\n';
+    std::cout << "sum=" << unique.stream().sum()
+              << " average=" << unique.stream().average().orElse(0.0) << " first=" << unique.first()
+              << " last=" << unique.last() << '\n';
 
     printSection("teeing two collectors");
-    const std::string summary = cppstream::Stream<int>::of(numbers).collect(
-        cppstream::Collectors::teeing<int>(cppstream::Collectors::counting<int>(),
+    const std::string summary =
+        cppstream::Stream<int>::of(numbers).collect(cppstream::Collectors::teeing<int>(
+            cppstream::Collectors::counting<int>(),
             cppstream::Collectors::summingInt<int>([](int value) { return value; }),
             [](std::int64_t count, int sum) {
                 return "count=" + std::to_string(count) + " sum=" + std::to_string(sum);

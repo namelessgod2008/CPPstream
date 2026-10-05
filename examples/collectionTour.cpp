@@ -15,13 +15,11 @@
 
 namespace {
 
-void printSection(const std::string& title)
-{
+void printSection(const std::string& title) {
     std::cout << "\n== " << title << " ==\n";
 }
 
-void printInts(const cppstream::Collection<int>& values)
-{
+void printInts(const cppstream::Collection<int>& values) {
     std::cout << '[';
     bool first = true;
     for (const int value : values) {
@@ -132,14 +130,16 @@ int run() {
     }
     std::cout << '\n';
     std::cout << "removing \"bob\" through the descending key set: "
-              << (descendingKeys.remove(std::string("bob")) ? "yes" : "no")
-              << ", map size is now " << ages.size() << '\n';
+              << (descendingKeys.remove(std::string("bob")) ? "yes" : "no") << ", map size is now "
+              << ages.size() << '\n';
 
     printSection("gather: windows, folds and scans");
     const std::vector<int> data{1, 2, 3, 4, 5, 6, 7};
     std::cout << "windowFixed(3):";
     for (const cppstream::ArrayList<int>& windowed :
-        cppstream::Stream<int>::of(data).gather(cppstream::Gatherers::windowFixed<int>(3)).toList()) {
+         cppstream::Stream<int>::of(data)
+             .gather(cppstream::Gatherers::windowFixed<int>(3))
+             .toList()) {
         std::cout << ' ';
         printInts(windowed);
     }
@@ -147,10 +147,10 @@ int run() {
 
     std::cout << "windowSliding(3) sums:";
     for (const int sum :
-        cppstream::Stream<int>::of(data)
-            .gather(cppstream::Gatherers::windowSliding<int>(3))
-            .map([](const cppstream::ArrayList<int>& slide) { return slide.stream().sum(); })
-            .toList()) {
+         cppstream::Stream<int>::of(data)
+             .gather(cppstream::Gatherers::windowSliding<int>(3))
+             .map([](const cppstream::ArrayList<int>& slide) { return slide.stream().sum(); })
+             .toList()) {
         std::cout << ' ' << sum;
     }
     std::cout << '\n';
@@ -165,14 +165,13 @@ int run() {
     std::cout << '\n';
 
     std::cout << "mapMulti (push one result per unit):";
-    for (const int repeated :
-        cppstream::Stream<int>::of(std::vector<int>{1, 2, 3})
-            .mapMulti<int>([](int value, cppstream::Downstream<int>& sink) {
-                for (int i = 0; i < value; ++i) {
-                    sink.push(value);
-                }
-            })
-            .toList()) {
+    for (const int repeated : cppstream::Stream<int>::of(std::vector<int>{1, 2, 3})
+                                  .mapMulti<int>([](int value, cppstream::Downstream<int>& sink) {
+                                      for (int i = 0; i < value; ++i) {
+                                          sink.push(value);
+                                      }
+                                  })
+                                  .toList()) {
         std::cout << ' ' << repeated;
     }
     std::cout << '\n';

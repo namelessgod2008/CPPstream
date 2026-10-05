@@ -103,7 +103,9 @@ public:
     class HashSetConstIterator final : public Iterator<const T> {
     public:
         explicit HashSetConstIterator(const HashSet& owner)
-            : owner_(&owner), current_(owner.buckets_.begin()), expectedModCount_(owner.modCount_) {}
+            : owner_(&owner),
+              current_(owner.buckets_.begin()),
+              expectedModCount_(owner.modCount_) {}
 
         [[nodiscard]] bool hasNext() const override { return current_ != owner_->buckets_.end(); }
 
@@ -129,7 +131,9 @@ public:
     class HashSetIterator final : public Iterator<T> {
     public:
         explicit HashSetIterator(HashSet& owner)
-            : owner_(&owner), current_(owner.buckets_.begin()), expectedModCount_(owner.modCount_) {}
+            : owner_(&owner),
+              current_(owner.buckets_.begin()),
+              expectedModCount_(owner.modCount_) {}
 
         [[nodiscard]] bool hasNext() const override { return current_ != owner_->buckets_.end(); }
 

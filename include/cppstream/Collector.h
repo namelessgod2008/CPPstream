@@ -51,7 +51,7 @@ public:
     using Finisher = std::function<R(A&&)>;
 
     Collector(Supplier supplier, Accumulator accumulator, Combiner combiner, Finisher finisher,
-        std::vector<Characteristics> characteristics = {})
+              std::vector<Characteristics> characteristics = {})
         : supplier_(std::move(supplier)),
           accumulator_(std::move(accumulator)),
           combiner_(std::move(combiner)),
@@ -63,11 +63,11 @@ public:
     /// Takes an initializer_list so that call sites read like Java's varargs form,
     /// then widens, because the combinators in Collectors.h forward the
     /// characteristics of the collector they wrap.
-    [[nodiscard]] static Collector of(Supplier supplier, Accumulator accumulator,
-        Combiner combiner, Finisher finisher,
-        std::initializer_list<Characteristics> characteristics = {}) {
+    [[nodiscard]] static Collector of(Supplier supplier, Accumulator accumulator, Combiner combiner,
+                                      Finisher finisher,
+                                      std::initializer_list<Characteristics> characteristics = {}) {
         return Collector(std::move(supplier), std::move(accumulator), std::move(combiner),
-            std::move(finisher), std::vector<Characteristics>(characteristics));
+                         std::move(finisher), std::vector<Characteristics>(characteristics));
     }
 
     [[nodiscard]] const Supplier& supplier() const noexcept { return supplier_; }
@@ -110,12 +110,10 @@ concept CollectorType = requires {
 template <class C, class T>
 concept CollectorLike = CollectorType<C> && requires(const C& collector) {
     { std::invoke(collector.supplier()) } -> std::convertible_to<typename C::accumulatorType>;
-    requires std::invocable<decltype(collector.accumulator()),
-        typename C::accumulatorType&, T&>;
-    requires std::invocable<decltype(collector.combiner()),
-        typename C::accumulatorType, typename C::accumulatorType>;
-    requires std::invocable<decltype(collector.finisher()),
-        typename C::accumulatorType>;
+    requires std::invocable<decltype(collector.accumulator()), typename C::accumulatorType&, T&>;
+    requires std::invocable<decltype(collector.combiner()), typename C::accumulatorType,
+                            typename C::accumulatorType>;
+    requires std::invocable<decltype(collector.finisher()), typename C::accumulatorType>;
 } && std::same_as<typename C::elementType, T>;
 
 }  // namespace cppstream

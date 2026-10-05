@@ -174,7 +174,8 @@ public:
         return Optional<V>::of(position->second);
     }
 
-    Optional<V> computeIfPresent(const K& key,
+    Optional<V> computeIfPresent(
+        const K& key,
         const std::function<Optional<V>(const K&, const V&)>& remappingFunction) override {
         this->checkNotFrozen();
         auto found = entries_.find(key);
@@ -191,7 +192,8 @@ public:
         return Optional<V>::of(found->second);
     }
 
-    Optional<V> merge(const K& key, const V& value,
+    Optional<V> merge(
+        const K& key, const V& value,
         const std::function<Optional<V>(const V&, const V&)>& remappingFunction) override {
         this->checkNotFrozen();
         requireNonNull(key);
@@ -318,8 +320,8 @@ public:
     [[nodiscard]] TreeMapRangeView<K, V, Compare> subMap(const K& fromKey, const K& toKey);
 
     /// Java: NavigableMap.subMap(from, fromInclusive, to, toInclusive).
-    [[nodiscard]] TreeMapRangeView<K, V, Compare> subMap(
-        const K& fromKey, bool fromInclusive, const K& toKey, bool toInclusive);
+    [[nodiscard]] TreeMapRangeView<K, V, Compare> subMap(const K& fromKey, bool fromInclusive,
+                                                         const K& toKey, bool toInclusive);
 
     /// Java: NavigableMap.headMap(to) -- everything strictly below to.
     [[nodiscard]] TreeMapRangeView<K, V, Compare> headMap(const K& toKey);
@@ -337,8 +339,8 @@ public:
     /// return throws UnsupportedOperationException, mirroring Java's
     /// Collections.unmodifiableNavigableMap(map).subMap(...) chain.
     [[nodiscard]] TreeMapRangeView<K, V, Compare> subMap(const K& fromKey, const K& toKey) const;
-    [[nodiscard]] TreeMapRangeView<K, V, Compare> subMap(
-        const K& fromKey, bool fromInclusive, const K& toKey, bool toInclusive) const;
+    [[nodiscard]] TreeMapRangeView<K, V, Compare> subMap(const K& fromKey, bool fromInclusive,
+                                                         const K& toKey, bool toInclusive) const;
     [[nodiscard]] TreeMapRangeView<K, V, Compare> headMap(const K& toKey) const;
     [[nodiscard]] TreeMapRangeView<K, V, Compare> headMap(const K& toKey, bool inclusive) const;
     [[nodiscard]] TreeMapRangeView<K, V, Compare> tailMap(const K& fromKey) const;
@@ -436,16 +438,25 @@ public:
     /// tailMap/descendingMap. The fences are always the *ascending* pair; only the
     /// direction flag distinguishes an ascending window from a descending one.
     TreeMapRangeView(TreeMap<K, V, Compare>& backing, std::optional<K> from, bool fromInclusive,
-        std::optional<K> to, bool toInclusive, bool descending = false)
-        : backing_(&backing), writableBacking_(&backing), from_(std::move(from)),
-          to_(std::move(to)), fromInclusive_(fromInclusive), toInclusive_(toInclusive),
+                     std::optional<K> to, bool toInclusive, bool descending = false)
+        : backing_(&backing),
+          writableBacking_(&backing),
+          from_(std::move(from)),
+          to_(std::move(to)),
+          fromInclusive_(fromInclusive),
+          toInclusive_(toInclusive),
           descending_(descending) {}
 
     /// The read-only form, built by the const overloads.
     TreeMapRangeView(const TreeMap<K, V, Compare>& backing, std::optional<K> from,
-        bool fromInclusive, std::optional<K> to, bool toInclusive, bool descending = false)
-        : backing_(&backing), from_(std::move(from)), to_(std::move(to)),
-          fromInclusive_(fromInclusive), toInclusive_(toInclusive), descending_(descending) {}
+                     bool fromInclusive, std::optional<K> to, bool toInclusive,
+                     bool descending = false)
+        : backing_(&backing),
+          from_(std::move(from)),
+          to_(std::move(to)),
+          fromInclusive_(fromInclusive),
+          toInclusive_(toInclusive),
+          descending_(descending) {}
 
     /// Reports the backing map's count rather than the view's own: the key/values/
     /// entry views built on top of this one iterate that map, so a structural
@@ -550,7 +561,8 @@ public:
     /// *here*: delegating would let the backing remap a key the window cannot see,
     /// which is not what Java does. Verified against a JDK: the mapping outside the
     /// window is untouched.
-    Optional<V> computeIfPresent(const K& key,
+    Optional<V> computeIfPresent(
+        const K& key,
         const std::function<Optional<V>(const K&, const V&)>& remappingFunction) override {
         this->checkNotFrozen();
         TreeMap<K, V, Compare>& target = writable();
@@ -562,7 +574,8 @@ public:
 
     /// Java: SubMap.merge. Rejected outside the window for the same reason
     /// putIfAbsent is.
-    Optional<V> merge(const K& key, const V& value,
+    Optional<V> merge(
+        const K& key, const V& value,
         const std::function<Optional<V>(const V&, const V&)>& remappingFunction) override {
         this->checkNotFrozen();
         TreeMap<K, V, Compare>& target = writable();
@@ -572,7 +585,6 @@ public:
     }
 
     // --- NavigableMap queries over the window -------------------------------
-
 
     /// C++-only: whether this window can be written through. Java has no equivalent
     /// because its unmodifiable wrappers are classes of their own; here the flag is
@@ -662,14 +674,14 @@ public:
     /// The new window may not widen this one, exactly as Java's SubMap requires,
     /// and on a descending view "from" is the *upper* end, so the two bounds are
     /// stored the other way round while the view keeps its direction.
-    [[nodiscard]] TreeMapRangeView subMap(
-        const K& fromKey, bool fromInclusive, const K& toKey, bool toInclusive) {
+    [[nodiscard]] TreeMapRangeView subMap(const K& fromKey, bool fromInclusive, const K& toKey,
+                                          bool toInclusive) {
         requireAcceptableWindow(fromKey, fromInclusive, toKey, toInclusive);
         return makeSubWindowFor(fromKey, fromInclusive, toKey, toInclusive);
     }
 
-    [[nodiscard]] TreeMapRangeView subMap(
-        const K& fromKey, bool fromInclusive, const K& toKey, bool toInclusive) const {
+    [[nodiscard]] TreeMapRangeView subMap(const K& fromKey, bool fromInclusive, const K& toKey,
+                                          bool toInclusive) const {
         requireAcceptableWindow(fromKey, fromInclusive, toKey, toInclusive);
         return makeReadOnlySubWindowFor(fromKey, fromInclusive, toKey, toInclusive);
     }
@@ -720,7 +732,8 @@ public:
     [[nodiscard]] TreeMapRangeView tailMap(const K& fromKey, bool inclusive) const {
         requireAcceptedBound(fromKey, inclusive, "fromKey out of range");
         if (descending_) {
-            return TreeMapRangeView(*backing_, from_, fromInclusive_, fromKey, inclusive, descending_);
+            return TreeMapRangeView(*backing_, from_, fromInclusive_, fromKey, inclusive,
+                                    descending_);
         }
         return TreeMapRangeView(*backing_, fromKey, inclusive, to_, toInclusive_);
     }
@@ -789,20 +802,20 @@ private:
     /// throws, exactly as Java's wrapper does. Which backing to carry is the whole
     /// decision; the new fences are already known to lie inside this window.
     [[nodiscard]] TreeMapRangeView makeSubWindow(const std::optional<K>& from, bool fromInclusive,
-        const std::optional<K>& to, bool toInclusive) const {
+                                                 const std::optional<K>& to,
+                                                 bool toInclusive) const {
         if (writableBacking_ == nullptr) {
-            return TreeMapRangeView(
-                *backing_, from, fromInclusive, to, toInclusive, descending_);
+            return TreeMapRangeView(*backing_, from, fromInclusive, to, toInclusive, descending_);
         }
-        return TreeMapRangeView(
-            *writableBacking_, from, fromInclusive, to, toInclusive, descending_);
+        return TreeMapRangeView(*writableBacking_, from, fromInclusive, to, toInclusive,
+                                descending_);
     }
 
     /// subMap()'s window, with the two bounds stored ascending whichever way this
     /// view walks: Java's DescendingSubMap passes the pair to its base constructor
     /// in the opposite order for exactly this reason.
     [[nodiscard]] TreeMapRangeView makeSubWindowFor(const K& fromKey, bool fromInclusive,
-        const K& toKey, bool toInclusive) const {
+                                                    const K& toKey, bool toInclusive) const {
         if (descending_) {
             // The reversal is the point: the two bounds have to come out stored
             // ascending whichever way this view walks. See the note above.
@@ -815,23 +828,23 @@ private:
     /// The same, forced read-only. Used by the const overloads, which must not hand
     /// out a writable window however writable this one happens to be.
     [[nodiscard]] TreeMapRangeView makeReadOnlySubWindowFor(const K& fromKey, bool fromInclusive,
-        const K& toKey, bool toInclusive) const {
+                                                            const K& toKey,
+                                                            bool toInclusive) const {
         if (descending_) {
-            return TreeMapRangeView(
-                *backing_, toKey, toInclusive, fromKey, fromInclusive, descending_);
+            return TreeMapRangeView(*backing_, toKey, toInclusive, fromKey, fromInclusive,
+                                    descending_);
         }
-        return TreeMapRangeView(
-            *backing_, fromKey, fromInclusive, toKey, toInclusive, descending_);
+        return TreeMapRangeView(*backing_, fromKey, fromInclusive, toKey, toInclusive, descending_);
     }
 
     /// The same window walked the other way -- descendingMap().
     [[nodiscard]] TreeMapRangeView makeFlippedWindow() const {
         if (writableBacking_ == nullptr) {
-            return TreeMapRangeView(
-                *backing_, from_, fromInclusive_, to_, toInclusive_, !descending_);
+            return TreeMapRangeView(*backing_, from_, fromInclusive_, to_, toInclusive_,
+                                    !descending_);
         }
-        return TreeMapRangeView(
-            *writableBacking_, from_, fromInclusive_, to_, toInclusive_, !descending_);
+        return TreeMapRangeView(*writableBacking_, from_, fromInclusive_, to_, toInclusive_,
+                                !descending_);
     }
 
     /// The one place a read-only view is rejected. Everything writable funnels here.
@@ -850,9 +863,7 @@ private:
 
     /// The map's own ordering as the type-erased Comparator<K> whose compare()
     /// contract is Java's.
-    [[nodiscard]] Comparator<K> asComparator() const {
-        return comparatorFrom<K>(comparatorOf());
-    }
+    [[nodiscard]] Comparator<K> asComparator() const { return comparatorFrom<K>(comparatorOf()); }
 
     /// The four lookups as the *ascending* window answers them. floorKey/lowerKey/
     /// ceilingKey/higherKey pick a pair out of these, which is how a descending
@@ -989,7 +1000,7 @@ private:
     }
 
     void requireAcceptableWindow(const K& fromKey, bool fromInclusive, const K& toKey,
-        bool toInclusive) const {
+                                 bool toInclusive) const {
         requireAcceptedBound(fromKey, fromInclusive, "fromKey out of range");
         requireAcceptedBound(toKey, toInclusive, "toKey out of range");
         // Java tests the *ascending* pair, because that is what its submap
@@ -1223,7 +1234,8 @@ public:
     class ConstKeyIterator final : public Iterator<const K> {
     public:
         explicit ConstKeyIterator(const TreeMapKeySetView& owner, bool descending)
-            : owner_(&owner), keys_(owner.snapshotKeys(descending)),
+            : owner_(&owner),
+              keys_(owner.snapshotKeys(descending)),
               expectedModCount_(owner.window_.modCount()) {}
 
         [[nodiscard]] bool hasNext() const override { return cursor_ < keys_.size(); }
@@ -1267,7 +1279,8 @@ public:
     class KeyIterator final : public Iterator<K> {
     public:
         explicit KeyIterator(TreeMapKeySetView& owner, bool descending)
-            : owner_(&owner), keys_(owner.snapshotKeys(descending)),
+            : owner_(&owner),
+              keys_(owner.snapshotKeys(descending)),
               expectedModCount_(owner.window_.modCount()) {}
 
         [[nodiscard]] bool hasNext() const override { return cursor_ < keys_.size(); }
@@ -1337,13 +1350,13 @@ public:
     /// Java: KeySet.subSet(from, fromInclusive, to, toInclusive), which is
     /// subMap(...).navigableKeySet(): the window check and the orientation both
     /// live on the map view.
-    [[nodiscard]] TreeMapKeySetView subSet(
-        const K& fromKey, bool fromInclusive, const K& toKey, bool toInclusive) {
+    [[nodiscard]] TreeMapKeySetView subSet(const K& fromKey, bool fromInclusive, const K& toKey,
+                                           bool toInclusive) {
         return TreeMapKeySetView(window_.subMap(fromKey, fromInclusive, toKey, toInclusive));
     }
 
-    [[nodiscard]] TreeMapKeySetView subSet(
-        const K& fromKey, bool fromInclusive, const K& toKey, bool toInclusive) const {
+    [[nodiscard]] TreeMapKeySetView subSet(const K& fromKey, bool fromInclusive, const K& toKey,
+                                           bool toInclusive) const {
         return TreeMapKeySetView(window_.subMap(fromKey, fromInclusive, toKey, toInclusive));
     }
 
@@ -1450,29 +1463,28 @@ private:
 // same incompleteness reason: they hand out views too.
 
 template <class K, class V, class Compare>
-TreeMapRangeView<K, V, Compare> TreeMap<K, V, Compare>::subMap(
-    const K& fromKey, bool fromInclusive, const K& toKey, bool toInclusive) {
+TreeMapRangeView<K, V, Compare> TreeMap<K, V, Compare>::subMap(const K& fromKey, bool fromInclusive,
+                                                               const K& toKey, bool toInclusive) {
     requireNonNull(fromKey);
     requireNonNull(toKey);
     const Compare& less = entries_.key_comp();
     if (less(toKey, fromKey)) {
         throw IllegalArgumentException("fromKey > toKey");
     }
-    return TreeMapRangeView<K, V, Compare>(
-        *this, fromKey, fromInclusive, toKey, toInclusive);
+    return TreeMapRangeView<K, V, Compare>(*this, fromKey, fromInclusive, toKey, toInclusive);
 }
 
 template <class K, class V, class Compare>
-TreeMapRangeView<K, V, Compare> TreeMap<K, V, Compare>::subMap(
-    const K& fromKey, bool fromInclusive, const K& toKey, bool toInclusive) const {
+TreeMapRangeView<K, V, Compare> TreeMap<K, V, Compare>::subMap(const K& fromKey, bool fromInclusive,
+                                                               const K& toKey,
+                                                               bool toInclusive) const {
     requireNonNull(fromKey);
     requireNonNull(toKey);
     const Compare& less = entries_.key_comp();
     if (less(toKey, fromKey)) {
         throw IllegalArgumentException("fromKey > toKey");
     }
-    return TreeMapRangeView<K, V, Compare>(
-        *this, fromKey, fromInclusive, toKey, toInclusive);
+    return TreeMapRangeView<K, V, Compare>(*this, fromKey, fromInclusive, toKey, toInclusive);
 }
 
 template <class K, class V, class Compare>
@@ -1481,8 +1493,8 @@ TreeMapRangeView<K, V, Compare> TreeMap<K, V, Compare>::subMap(const K& fromKey,
 }
 
 template <class K, class V, class Compare>
-TreeMapRangeView<K, V, Compare> TreeMap<K, V, Compare>::subMap(
-    const K& fromKey, const K& toKey) const {
+TreeMapRangeView<K, V, Compare> TreeMap<K, V, Compare>::subMap(const K& fromKey,
+                                                               const K& toKey) const {
     return subMap(fromKey, true, toKey, false);
 }
 
@@ -1493,8 +1505,8 @@ TreeMapRangeView<K, V, Compare> TreeMap<K, V, Compare>::headMap(const K& toKey, 
 }
 
 template <class K, class V, class Compare>
-TreeMapRangeView<K, V, Compare> TreeMap<K, V, Compare>::headMap(
-    const K& toKey, bool inclusive) const {
+TreeMapRangeView<K, V, Compare> TreeMap<K, V, Compare>::headMap(const K& toKey,
+                                                                bool inclusive) const {
     requireNonNull(toKey);
     return TreeMapRangeView<K, V, Compare>(*this, std::nullopt, true, toKey, inclusive);
 }
@@ -1516,8 +1528,8 @@ TreeMapRangeView<K, V, Compare> TreeMap<K, V, Compare>::tailMap(const K& fromKey
 }
 
 template <class K, class V, class Compare>
-TreeMapRangeView<K, V, Compare> TreeMap<K, V, Compare>::tailMap(
-    const K& fromKey, bool inclusive) const {
+TreeMapRangeView<K, V, Compare> TreeMap<K, V, Compare>::tailMap(const K& fromKey,
+                                                                bool inclusive) const {
     requireNonNull(fromKey);
     return TreeMapRangeView<K, V, Compare>(*this, fromKey, inclusive, std::nullopt, false);
 }

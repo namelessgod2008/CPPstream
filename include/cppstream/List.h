@@ -94,8 +94,8 @@ public:
     /// Returned by pointer because ListView is a view, not a value: copying it
     /// would copy a reference to the same window. See DESIGN.md section 8, item 11.
     [[nodiscard]] virtual std::unique_ptr<ListView<T>> subList(int fromIndex, int toIndex) = 0;
-    [[nodiscard]] virtual std::unique_ptr<ListView<T>> subList(
-        int fromIndex, int toIndex) const = 0;
+    [[nodiscard]] virtual std::unique_ptr<ListView<T>> subList(int fromIndex,
+                                                               int toIndex) const = 0;
 
     /// Java: List.addAll(index, other).
     virtual bool addAll(int index, const Collection<T>& other) = 0;
@@ -135,7 +135,9 @@ public:
 
     /// Java: AbstractList.subList(fromIndex, toIndex) on a mutable list.
     ListView(List<T>& backing, int fromIndex, int toIndex)
-        : backing_(&backing), writableBacking_(&backing), offset_(fromIndex),
+        : backing_(&backing),
+          writableBacking_(&backing),
+          offset_(fromIndex),
           length_(toIndex - fromIndex) {
         validate(backing.size(), fromIndex, toIndex);
     }
@@ -282,8 +284,8 @@ public:
 
     [[nodiscard]] std::unique_ptr<ListIterator<T>> listIterator(int index) override {
         if (index < 0 || index > length_) {
-            throw IndexOutOfBoundsException(
-                "Index: " + std::to_string(index) + ", Size: " + std::to_string(length_));
+            throw IndexOutOfBoundsException("Index: " + std::to_string(index) +
+                                            ", Size: " + std::to_string(length_));
         }
         return std::make_unique<ListViewIterator>(*this, index);
     }
@@ -441,15 +443,13 @@ private:
 
     [[nodiscard]] int checkedInsertIndex(int index) const {
         if (index < 0 || index > length_) {
-            throw IndexOutOfBoundsException(
-                "Index: " + std::to_string(index) + ", Size: " + std::to_string(length_));
+            throw IndexOutOfBoundsException("Index: " + std::to_string(index) +
+                                            ", Size: " + std::to_string(length_));
         }
         return index;
     }
 
-    void checkSubRange(int fromIndex, int toIndex) const {
-        validate(length_, fromIndex, toIndex);
-    }
+    void checkSubRange(int fromIndex, int toIndex) const { validate(length_, fromIndex, toIndex); }
 
     static void validate(int bound, int fromIndex, int toIndex) {
         if (fromIndex < 0 || toIndex > bound || fromIndex > toIndex) {

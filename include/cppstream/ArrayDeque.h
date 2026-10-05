@@ -43,8 +43,8 @@ public:
 
     [[nodiscard]] bool contains(const T& element) const override {
         return std::find_if(nodes_.begin(), nodes_.end(), [&element](const T& candidate) {
-            return elementEquals(candidate, element);
-        }) != nodes_.end();
+                   return elementEquals(candidate, element);
+               }) != nodes_.end();
     }
 
     // --- Collection / Queue -------------------------------------------------
@@ -172,9 +172,9 @@ public:
     /// Java: Deque.removeLastOccurrence(element). Scans from the tail.
     [[nodiscard]] bool removeLastOccurrence(const T& element) override {
         this->checkNotFrozen();
-        auto position = std::find_if(nodes_.rbegin(), nodes_.rend(), [&element](const T& candidate) {
-            return elementEquals(candidate, element);
-        });
+        auto position = std::find_if(
+            nodes_.rbegin(), nodes_.rend(),
+            [&element](const T& candidate) { return elementEquals(candidate, element); });
         if (position == nodes_.rend()) {
             return false;
         }

@@ -146,7 +146,8 @@ public:
         const K& key, const std::function<Optional<V>(const K&, const V&)>& remappingFunction) = 0;
 
     /// Java: Map.merge(key, value, remappingFunction). Empty removes the entry.
-    [[nodiscard]] virtual Optional<V> merge(const K& key, const V& value,
+    [[nodiscard]] virtual Optional<V> merge(
+        const K& key, const V& value,
         const std::function<Optional<V>(const V&, const V&)>& remappingFunction) = 0;
 
     /// Java: Map.forEach(action). The action receives a mutable reference to the
@@ -325,7 +326,9 @@ public:
     class KeySetConstIterator final : public Iterator<const K> {
     public:
         explicit KeySetConstIterator(const KeySetView& owner)
-            : owner_(&owner), keys_(owner.snapshotKeys()), expectedModCount_(owner.map_->modCount()) {}
+            : owner_(&owner),
+              keys_(owner.snapshotKeys()),
+              expectedModCount_(owner.map_->modCount()) {}
 
         [[nodiscard]] bool hasNext() const override { return cursor_ < keys_.size(); }
 
@@ -368,7 +371,9 @@ public:
     class KeySetIterator final : public Iterator<K> {
     public:
         explicit KeySetIterator(KeySetView& owner)
-            : owner_(&owner), keys_(owner.snapshotKeys()), expectedModCount_(owner.map_->modCount()) {}
+            : owner_(&owner),
+              keys_(owner.snapshotKeys()),
+              expectedModCount_(owner.map_->modCount()) {}
 
         [[nodiscard]] bool hasNext() const override { return cursor_ < keys_.size(); }
 
@@ -449,7 +454,9 @@ public:
 
     [[nodiscard]] bool isEmpty() const override { return map_->isEmpty(); }
 
-    [[nodiscard]] bool contains(const V& value) const override { return map_->containsValue(value); }
+    [[nodiscard]] bool contains(const V& value) const override {
+        return map_->containsValue(value);
+    }
 
     /// Java: HashMap.Values.add, which throws. A value with no key has nowhere to
     /// live, which is exactly why Java forbids it too.
@@ -489,7 +496,9 @@ public:
     class ValuesConstIterator final : public Iterator<const V> {
     public:
         explicit ValuesConstIterator(const ValuesView& owner)
-            : owner_(&owner), keys_(owner.snapshotKeys()), expectedModCount_(owner.map_->modCount()) {}
+            : owner_(&owner),
+              keys_(owner.snapshotKeys()),
+              expectedModCount_(owner.map_->modCount()) {}
 
         [[nodiscard]] bool hasNext() const override { return cursor_ < keys_.size(); }
 
@@ -532,7 +541,9 @@ public:
     class ValuesIterator final : public Iterator<V> {
     public:
         explicit ValuesIterator(ValuesView& owner)
-            : owner_(&owner), keys_(owner.snapshotKeys()), expectedModCount_(owner.map_->modCount()) {}
+            : owner_(&owner),
+              keys_(owner.snapshotKeys()),
+              expectedModCount_(owner.map_->modCount()) {}
 
         [[nodiscard]] bool hasNext() const override { return cursor_ < keys_.size(); }
 
@@ -656,7 +667,9 @@ public:
     class EntrySetConstIterator final : public Iterator<const Entry> {
     public:
         explicit EntrySetConstIterator(const EntrySetView& owner)
-            : owner_(&owner), keys_(owner.snapshotKeys()), expectedModCount_(owner.map_->modCount()) {}
+            : owner_(&owner),
+              keys_(owner.snapshotKeys()),
+              expectedModCount_(owner.map_->modCount()) {}
 
         [[nodiscard]] bool hasNext() const override { return cursor_ < keys_.size(); }
 
@@ -701,7 +714,9 @@ public:
     class EntrySetIterator final : public Iterator<Entry> {
     public:
         explicit EntrySetIterator(EntrySetView& owner)
-            : owner_(&owner), keys_(owner.snapshotKeys()), expectedModCount_(owner.map_->modCount()) {}
+            : owner_(&owner),
+              keys_(owner.snapshotKeys()),
+              expectedModCount_(owner.map_->modCount()) {}
 
         [[nodiscard]] bool hasNext() const override { return cursor_ < keys_.size(); }
 

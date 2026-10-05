@@ -43,9 +43,8 @@ public:
 
     /// Java: Comparator.reversed().
     [[nodiscard]] Comparator reversed() const {
-        return Comparator([fn = compareFn_](const T& left, const T& right) {
-            return fn(right, left);
-        });
+        return Comparator(
+            [fn = compareFn_](const T& left, const T& right) { return fn(right, left); });
     }
 
     /// Java: Comparator.thenComparing(other).
@@ -66,15 +65,16 @@ public:
 
     /// Java: Comparator.thenComparing(keyExtractor, keyComparator).
     template <class F, class U>
-    [[nodiscard]] Comparator thenComparing(F keyExtractor, const Comparator<U>& keyComparator) const {
+    [[nodiscard]] Comparator thenComparing(F keyExtractor,
+                                           const Comparator<U>& keyComparator) const {
         return Comparator([self = *this, keyExtractor = std::move(keyExtractor), keyComparator](
                               const T& left, const T& right) {
             const int result = self.compare(left, right);
             if (result != 0) {
                 return result;
             }
-            return keyComparator.compare(
-                std::invoke(keyExtractor, left), std::invoke(keyExtractor, right));
+            return keyComparator.compare(std::invoke(keyExtractor, left),
+                                         std::invoke(keyExtractor, right));
         });
     }
 
@@ -108,11 +108,11 @@ public:
     /// Java: Comparator.comparing(keyExtractor, keyComparator).
     template <class F, class U>
     static Comparator comparing(F keyExtractor, const Comparator<U>& keyComparator) {
-        return Comparator([keyExtractor = std::move(keyExtractor), keyComparator](
-                              const T& left, const T& right) {
-            return keyComparator.compare(
-                std::invoke(keyExtractor, left), std::invoke(keyExtractor, right));
-        });
+        return Comparator(
+            [keyExtractor = std::move(keyExtractor), keyComparator](const T& left, const T& right) {
+                return keyComparator.compare(std::invoke(keyExtractor, left),
+                                             std::invoke(keyExtractor, right));
+            });
     }
 
     /// Java: Comparator.nullsFirst(comparator). Only meaningful for pointer

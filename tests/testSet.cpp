@@ -9,8 +9,7 @@
 #include <string>
 #include <vector>
 
-TEST_CASE("HashSet rejects duplicates and reports whether it inserted")
-{
+TEST_CASE("HashSet rejects duplicates and reports whether it inserted") {
     cppstream::HashSet<int> values;
 
     CHECK(values.add(1));
@@ -25,8 +24,7 @@ TEST_CASE("HashSet rejects duplicates and reports whether it inserted")
     CHECK(values.size() == 1);
 }
 
-TEST_CASE("HashSet is constructible from a collection, a capacity and a list")
-{
+TEST_CASE("HashSet is constructible from a collection, a capacity and a list") {
     const cppstream::ArrayList<int> source{1, 2, 3, 3};
     const cppstream::HashSet<int> fromCollection(source);
     CHECK(fromCollection.size() == 3);
@@ -40,8 +38,7 @@ TEST_CASE("HashSet is constructible from a collection, a capacity and a list")
     CHECK_THROWS_AS(cppstream::HashSet<int>(-1), cppstream::IllegalArgumentException);
 }
 
-TEST_CASE("Set equality ignores order where List equality does not")
-{
+TEST_CASE("Set equality ignores order where List equality does not") {
     const cppstream::HashSet<int> left{1, 2, 3};
     const cppstream::HashSet<int> reordered{3, 2, 1};
     const cppstream::ArrayList<int> asList{1, 2, 3};
@@ -60,8 +57,7 @@ TEST_CASE("Set equality ignores order where List equality does not")
     CHECK_FALSE(left.equals(smaller));
 }
 
-TEST_CASE("HashSet iterators are fail-fast and remove() works")
-{
+TEST_CASE("HashSet iterators are fail-fast and remove() works") {
     cppstream::HashSet<int> values{1, 2, 3, 4};
 
     auto iterator = values.iterator();
@@ -83,8 +79,7 @@ TEST_CASE("HashSet iterators are fail-fast and remove() works")
     CHECK_THROWS_AS(doomed->next(), cppstream::ConcurrentModificationException);
 }
 
-TEST_CASE("frozen sets refuse every mutation path")
-{
+TEST_CASE("frozen sets refuse every mutation path") {
     cppstream::HashSet<int> values{1, 2, 3};
     values.freeze();
 
@@ -93,13 +88,12 @@ TEST_CASE("frozen sets refuse every mutation path")
     CHECK_THROWS_AS(values.remove(1), cppstream::UnsupportedOperationException);
     CHECK_THROWS_AS(values.clear(), cppstream::UnsupportedOperationException);
     CHECK_THROWS_AS(values.removeIf([](int value) { return value == 1; }),
-        cppstream::UnsupportedOperationException);
+                    cppstream::UnsupportedOperationException);
 
     CHECK(values.size() == 3);
 }
 
-TEST_CASE("range-for and std::ranges see a Set through the read-only path")
-{
+TEST_CASE("range-for and std::ranges see a Set through the read-only path") {
     const cppstream::HashSet<int> values{1, 2, 3, 4};
 
     int total = 0;
@@ -112,8 +106,7 @@ TEST_CASE("range-for and std::ranges see a Set through the read-only path")
     CHECK(std::ranges::count_if(values, [](int value) { return value > 2; }) == 2);
 }
 
-TEST_CASE("TreeSet iterates in sorted order")
-{
+TEST_CASE("TreeSet iterates in sorted order") {
     const cppstream::TreeSet<int> values{5, 1, 4, 2, 3, 3};
 
     CHECK(values.size() == 5);
@@ -126,8 +119,7 @@ TEST_CASE("TreeSet iterates in sorted order")
     CHECK(walked == std::vector<int>{1, 2, 3, 4, 5});
 }
 
-TEST_CASE("TreeSet navigable queries follow NavigableSet")
-{
+TEST_CASE("TreeSet navigable queries follow NavigableSet") {
     const cppstream::TreeSet<int> values{10, 20, 30, 40};
 
     CHECK(values.first() == 10);
@@ -148,11 +140,10 @@ TEST_CASE("TreeSet navigable queries follow NavigableSet")
     CHECK(values.tailSet(30).toArray() == std::vector<int>{30, 40});
 
     CHECK_THROWS_AS(static_cast<void>(cppstream::TreeSet<int>{}.first()),
-        cppstream::NoSuchElementException);
+                    cppstream::NoSuchElementException);
 }
 
-TEST_CASE("TreeSet mutation keeps ordering and stays fail-fast")
-{
+TEST_CASE("TreeSet mutation keeps ordering and stays fail-fast") {
     cppstream::TreeSet<int> values{30, 10, 20};
 
     CHECK(values.add(5));
@@ -170,8 +161,7 @@ TEST_CASE("TreeSet mutation keeps ordering and stays fail-fast")
     CHECK_THROWS_AS(iterator->next(), cppstream::ConcurrentModificationException);
 }
 
-TEST_CASE("TreeSet accepts a custom comparator")
-{
+TEST_CASE("TreeSet accepts a custom comparator") {
     // Reverse order, supplied as a std::set-style comparer rather than a
     // cppstream::Comparator: the strategy parameter lives on the concrete class.
     cppstream::TreeSet<int, std::greater<>> descending{1, 3, 2};
@@ -179,8 +169,7 @@ TEST_CASE("TreeSet accepts a custom comparator")
     CHECK(descending.first() == 3);
 }
 
-TEST_CASE("TreeSet.descendingSet is a live view of the same tree")
-{
+TEST_CASE("TreeSet.descendingSet is a live view of the same tree") {
     cppstream::TreeSet<int> values{3, 1, 2};
 
     auto descending = values.descendingSet();
@@ -212,8 +201,7 @@ TEST_CASE("TreeSet.descendingSet is a live view of the same tree")
     CHECK(descending.isSet());
 }
 
-TEST_CASE("TreeSet.Descending is still an independent reversed copy")
-{
+TEST_CASE("TreeSet.Descending is still an independent reversed copy") {
     const cppstream::TreeSet<int> ascending{3, 1, 2};
 
     // descendingSet() is a view now; the alias still names the copy you build
@@ -226,8 +214,7 @@ TEST_CASE("TreeSet.Descending is still an independent reversed copy")
     CHECK(ascending.size() == 3);  // the copy is independent storage
 }
 
-TEST_CASE("TreeSet descending views navigate and iterate in their own order")
-{
+TEST_CASE("TreeSet descending views navigate and iterate in their own order") {
     cppstream::TreeSet<int> values{10, 20, 30, 40, 50};
     auto descending = values.descendingSet();
 
@@ -252,7 +239,7 @@ TEST_CASE("TreeSet descending views navigate and iterate in their own order")
     // Rejected the same way, and with Java's message: "from" is the upper end here,
     // so 20 < 40 in ascending terms is the backwards window.
     CHECK_THROWS_AS(static_cast<void>(descending.subSet(20, 40)),
-        cppstream::IllegalArgumentException);
+                    cppstream::IllegalArgumentException);
 
     // descendingIterator() is the opposite of the view's own order.
     std::vector<int> forwards;
@@ -263,14 +250,14 @@ TEST_CASE("TreeSet descending views navigate and iterate in their own order")
     CHECK(forwards == std::vector<int>{20, 30, 40});
 }
 
-TEST_CASE("a descending view taken from a const set is read-only")
-{
+TEST_CASE("a descending view taken from a const set is read-only") {
     const cppstream::TreeSet<int> values{1, 2, 3};
     auto descending = values.descendingSet();
 
     CHECK(descending.toArray() == std::vector<int>{3, 2, 1});
     CHECK_THROWS_AS(static_cast<void>(descending.add(0)), cppstream::UnsupportedOperationException);
-    CHECK_THROWS_AS(static_cast<void>(descending.remove(1)), cppstream::UnsupportedOperationException);
+    CHECK_THROWS_AS(static_cast<void>(descending.remove(1)),
+                    cppstream::UnsupportedOperationException);
 
     // A window of a read-only view is a read-only view, not an exception -- the
     // unmodifiableNavigableSet(set).descendingSet().subSet(...) chain.
@@ -278,8 +265,7 @@ TEST_CASE("a descending view taken from a const set is read-only")
     CHECK(descending.descendingSet().toArray() == std::vector<int>{1, 2, 3});
 }
 
-TEST_CASE("TreeSet.descendingIterator walks tail to head and fails fast")
-{
+TEST_CASE("TreeSet.descendingIterator walks tail to head and fails fast") {
     cppstream::TreeSet<int> values{1, 2, 3};
 
     std::vector<int> seen;
@@ -302,8 +288,7 @@ TEST_CASE("TreeSet.descendingIterator walks tail to head and fails fast")
     CHECK(seen == std::vector<int>{4, 3, 2, 1});
 }
 
-TEST_CASE("HashSet accepts a custom hash strategy")
-{
+TEST_CASE("HashSet accepts a custom hash strategy") {
     struct Point {
         int x;
         int y;
@@ -327,8 +312,7 @@ TEST_CASE("HashSet accepts a custom hash strategy")
     CHECK(points.size() == 2);
 }
 
-TEST_CASE("set operations inherited from AbstractCollection still work")
-{
+TEST_CASE("set operations inherited from AbstractCollection still work") {
     cppstream::HashSet<int> values{1, 2, 3, 4};
     const cppstream::HashSet<int> odds{1, 3};
 

@@ -95,7 +95,7 @@ CppStream/
 │   ├── Collectors.h
 │   ├── Gatherer.h           # Gatherer / Downstream / Void
 │   ├── Gatherers.h          # windowFixed / windowSliding / fold / scan
-│   ├── SummaryStatistics.h  # Int / Long / DoubleSummaryStatistics
+│   ├── SummaryStatistics.h  # Int / Long / DoubleSummaryStatistics + KahanSummation
 │   └── Lists.h / Sets.h / Maps.h
 ├── tests/
 │   ├── CMakeLists.txt
@@ -220,7 +220,17 @@ done
   - `modernize-return-braced-init-list` 4 处（`Map.h` ×3、`TreeMap.h` ×1）：异常类的构造函数是 `explicit`，检查唯一接受的括号形式是 `return {X(...)}`，而那个形式又会踩上 `readability-trailing-comma`。
   - `readability-suspicious-call-argument` 2 处（`TreeMap.h` / `TreeSet.h` 的 `makeSubWindowFor`）：递减视图要把一对边界**反着**存成升序，检查只看得见实参名，看不出来这是有意的——`makeReadOnlySubWindowFor` 里同样的写法它就没报，可见是启发式的。
 - `readability-identifier-naming` 那 2 条改的是**配置**而不是代码：`modCount_` / `frozen_` 是 protected 成员（容器层要把它们交给子类），而 `ProtectedMember*` 没配时不会继承 `PrivateMemberSuffix`，于是 `.clang-tidy` 里补了 `ProtectedMemberCase` / `ProtectedMemberSuffix`。
-- 历史代码的**格式**仍然不干净：41 个一方文件（约 15272 行）与 `.clang-format` 的期望不一致，典型差异是 lambda 形参对齐、`->` 返回类型的换行位置、`#include` 分组顺序。整库重排会产出一份横跨 40+ 文件的大 diff，所以仍然没顺手做——要做应当单独一次提交。本次动过的 hunk 都用 `--lines=` 排干净了（检查办法：按 `git diff -U0` 的新文件侧范围对每个 hunk 跑一遍 clang-format，看是否产生差异）。
+- 一方文件的**格式**已经统一：全部 44 个受检文件（`include/` / `tests/` / `examples/`，`tests/third_party/` 除外）都过 `clang-format --dry-run --Werror`。此前 41 个文件与 `.clang-format` 不一致的典型差异是 lambda 形参对齐、`->` 返回类型的换行位置、`#include` 分组顺序，这一轮一次性排齐，CI 负责不让它再走样。
+- 格式化以 `clang-format 22.1.8` 为固定版本（CI 用同一个版本），并与 CLion 自带的 22.0.0git 交叉验证过：两者对全库每个文件的判定一致。
+
+### 4.2 CI（GitHub Actions）
+
+`.github/workflows/ci.yml` 在 push / PR / 手动触发时跑两个 job：
+
+- `build-and-test`：`ubuntu-24.04` + toolchain PPA 的 `g++-16`，矩阵四档——Debug、Release、`CPPSTREAM_WARNINGS_AS_ERRORS=ON`、`CPPSTREAM_ENABLE_SANITIZERS=ON`，每档 configure → build → `ctest --output-on-failure`。
+- `formatting`：`pip install clang-format==22.1.8` 后对 `include/` / `tests/` / `examples/` 的全部 `.h` / `.cpp`（`tests/third_party/` 除外）跑 `clang-format --dry-run --Werror`。
+
+CI 暂不跑 clang-tidy：它需要一份 `compile_commands.json` 和一个与 CLion 自带 23.0.0git 匹配的版本，版本一漂移告警集合就会变，等有固定工具链再加。
 
 ---
 
@@ -698,12 +708,12 @@ parallelPool().forEach(batch.size(), [&](i) { out[i] = mapper(in[i]); });
 |---|---|---|
 | `map` / `filter` / `peek` | ✅ 批处理 | 一元、无状态，批内顺序无关，结果按序写回 |
 | `forEach` | ✅ 批处理 | 动作重叠执行，元素仍按遭遇顺序取出 |
-| `collect` / `reduce` / `min` / `max` / `sum` | ✅ 分片 + 有序合并 | 累加器须可结合，与 Java 对并行归约的要求一致 |
+| `collect` / `reduce` / `min` / `max` / `sum`（整数） | ✅ 分片 + 有序合并 | 累加器须可结合，与 Java 对并行归约的要求一致 |
 | `anyMatch` / `allMatch` / `noneMatch` | ✅ 批处理 + 短路 | 一批命中就停止拉取，靠一个 relaxed atomic 做见证 |
 | `flatMap` | ⚠️ 部分 | mapper 并行求值；内层流仍**惰性且按序**排空（只有外层批次是急切的） |
 | `sorted` / `reversed` / `distinct` | ❌ 屏障 | 有状态 / 需要全量，一次一个元素；并行标志继续往下传 |
 | `mapMulti` / `gather` | ❌ 屏障 | 每个输入可产出任意多个元素（§7.7），批处理必须先物化 |
-| `count` / `toArray` / `toList` / `findFirst` / `findAny` / `average` / `forEachOrdered` | ❌ 顺序 | 自身无可并行的算力；上游阶段照常批处理。`findFirst` 更短：只拉一个元素，所以有界并行流不会被它抽干 |
+| `count` / `toArray` / `toList` / `findFirst` / `findAny` / `average` / `sum`（double） / `forEachOrdered` | ❌ 顺序 | 自身无可并行的算力；上游阶段照常批处理。`findFirst` 更短：只拉一个元素，所以有界并行流不会被它抽干 |
 
 三个必须记住的语义后果（都写进了 §8 第 8 条）：
 
@@ -724,7 +734,9 @@ Optional<double> average() && requires std::integral<T> || std::floating_point<T
 
 这是全库唯一一处"因为 C++ 更好所以不需要复刻"的地方。缺失的 `IntStream.range(a, b)` 由 `Stream<T>::range` / `rangeClosed` 补上。
 
-**并行流下的终结操作**：`forEach` / `collect` / `reduce`（两种重载）/ `min` / `max` / `sum` / 三种 `match` 在 `parallel()` 之后按批并行——`collect` 一系走"每片一个累加器 + 按遭遇顺序 `combiner` 合并"，`match` 一系靠一批命中就停止拉取。`forEachOrdered` / `count` / `toArray` / `toList` / `findFirst` / `findAny` / `average` 保持顺序执行，只享受上游阶段的并行：它们自身没有可并行的算力，而 `findFirst` 的"只拉一个元素"恰恰是它该有的短路。分片合并要求累加器可结合，与 Java 对并行归约的要求一致。详见 §7.10。
+**`double` 求和用 Java 的 Kahan 补偿，并按遭遇顺序累加**：`sum` 对整数是普通的 `reduce(0, +)`，可以分片并行；对 `double` 则走 `KahanSummation`（`java.util.stream.Collectors#sumWithCompensation` / `#computeFinalSum` 的逐行复刻），与 JDK 位级一致。补偿加法不满足结合律，分片合并会与逐元素累加差最后一位（实测一万个 `0.1`：逐元素 `1000.0`，分片 `1000.0000000000001`），所以 `double` 的加法本身按遭遇顺序串行执行，以保住"并行结果与顺序逐字节相同"这条本库承诺；上游批处理阶段照常并行，与 `average` 是同一条取舍。`average` 也用同一个补偿累加器，空集仍是 Java 的 `0.0`。
+
+**并行流下的终结操作**：`forEach` / `collect` / `reduce`（两种重载）/ `min` / `max` / `sum`（整数）/ 三种 `match` 在 `parallel()` 之后按批并行——`collect` 一系走"每片一个累加器 + 按遭遇顺序 `combiner` 合并"，`match` 一系靠一批命中就停止拉取。`forEachOrdered` / `count` / `toArray` / `toList` / `findFirst` / `findAny` / `average` / `sum`（double）保持顺序执行，只享受上游阶段的并行：它们自身没有可并行的算力，`sum`（double）另有"补偿加法不可结合"的原因（见上），而 `findFirst` 的"只拉一个元素"恰恰是它该有的短路。分片合并要求累加器可结合，与 Java 对并行归约的要求一致。详见 §7.10。
 
 ### 7.3 Collector 模型
 
@@ -866,6 +878,7 @@ Java 把它们挂在 `Stream` / `IntStream` 接口的静态方法上；C++ 的�
 - **惰性测试**：用 `CountingSource`（记录实际拉取次数的源）断言"中间操作不终结就一个元素都不拉"。这比用 `peek` 计数更强：它证明的是源都没被碰过。
 - **异常测试**：`IllegalStateException`（重复消费）、`NoSuchElementException`（空 `Optional::get`）、`ConcurrentModificationException`（迭代中修改）、`UnsupportedOperationException`（冻结列表修改）。
 - **编译失败测试**：把几种误用喂给编译器并断言编译失败，是证明"编译期单次消费"真的生效的唯一办法。已在 M2 手工验证通过的三种：lvalue 上调中间操作、lvalue 上调终结操作、拷贝构造。M6 把它们接进 CTest；M11 之后判定改由 `cmake/RunCompileFailTest.cmake` 承担（见 §4）：用例用 `// EXPECTED-ERROR-LINE: N` 指出错误该落在哪一行，脚本核实该行确有 `error:`，并拒绝把"路径写坏"之类的失败算作通过。
+- **浮点求和按 Java 的补偿算法对拍**：`Stream::sum` / `average`、`summingDouble` / `averagingDouble` / `summarizingDouble` 与 `DoubleSummaryStatistics` 全部走 `KahanSummation`，用例断言"十个 `0.1` 恰好加出 `1.0` / `0.1`"这种朴素循环给不出的位级结果，并覆盖空集 `0.0` 与含 `Infinity` 时的 `simpleSum` 兜底。并行的 `double` 求和按遭遇顺序累加，用例用一万个 `0.1` 把"并行 == 顺序（`1000.0`）"钉住，防止有人改回分片合并（那样会得到 `1000.0000000000001`）。
 - **三个配置每次都跑**：默认 Debug、`CPPSTREAM_WARNINGS_AS_ERRORS=ON`、`CPPSTREAM_ENABLE_SANITIZERS=ON`。Sanitizer 从 M0 就开着，不等 Collection 层——早开早暴露。
 - **活视图的测试按"有没有真的走同一份存储"来写**：不只看返回值对不对，而是"通过视图写进去，从原容器读出来"，以及反向。视图迭代器还要断言"背着我改原容器必须 fail-fast"。
 - **有序范围视图的期望值来自 JDK 实测**：`NavigableSubMap` 的栅栏规则（新栅栏能否放宽窗口、查找是否夹到窗口内、`computeIfPresent` 在窗口外动不动底层映射）在 javadoc 里写得很含糊，靠猜必错。做法是写一个等价的 Java 程序打印这些边界的输出，再把同一组用例翻译成 C++ 断言放进 `testRangeViews.cpp`——`floor(100)` 返回窗口末元素、`[20,40)` 上 `headSet(40,true)` 抛而 `headSet(40,false)` 可以、`computeIfPresent` 窗口外返回 null 且不改动映射，几条都是这样定下来的（`computeIfPresent` 那条直接修掉了一个真 bug，见 §6.8）。探针源文件留在 `tests/jdk/RangeViewProbe.java`，`javac RangeViewProbe.java && java RangeViewProbe` 即可复跑（实测环境 GraalVM 25.2.4）。
@@ -1066,6 +1079,15 @@ M10 结束时唯一的记录在案缺口就是并行流，且当时的口径是"
 5. **短路与顺序的边界照旧**：三种 `match` 并行求值但一批命中即停止拉取；`findFirst` / `findAny` 仍只拉一个元素（有界并行流不会被它抽干）；`forEachOrdered` / `count` / `toArray` / `toList` / `average` 顺序执行；`sorted` / `reversed` / `distinct` / `mapMulti` / `gather` 是屏障，但并行标志继续往下传。
 
 **测试规模（M11 结束时）**：242 个 `TEST_CASE` / 1490 条断言 + 6 个 CTest 用例，三种配置（Debug、`-Werror`、ASan+UBSan）全部通过；`-fno-rtti` 亦可直接构建。新增测试单元 `testParallel.cpp`（19 个用例）：每条路径都拿顺序版当基准对拍，另有"并行确实用了多个线程"（`set<thread::id>` 计数）、"池内嵌套不死锁"、"无界源不预读"（`CountingSource` 数拉取次数）、"异常穿出并行阶段"、"`setParallelism(1)` 整体退化"、"`collect` 在 `groupingBy` 这类顺序敏感收集器上与顺序版相等"几条专门的用例。`Collection::parallelStream()` 让"先设标志再建阶段"成为默认写法。
+
+### M11 之后 — 补齐、Kahan 与门禁（✅）
+
+- **补测试**：`Stream::findAny`、`Collectors::averagingLong`、`Maps::unmodifiableMap` 三个此前没有用例的公开 API 各补了一条。
+- **`double` 求和对齐 JDK**：新增 `KahanSummation`（`Collectors#sumWithCompensation` / `#computeFinalSum` 的逐行复刻），`Stream::sum` / `average`、`Collectors::summingDouble` / `averagingDouble` / `summarizingDouble` 与 `DoubleSummaryStatistics` 全部改用它；`double` 求和按遭遇顺序累加，同时保住 Kahan 与"并行结果 = 顺序结果，逐字节"。`SummaryStatistics.h` 里空集平均值的注释改成与代码、JDK 一致（`0.0`）。
+- **格式与 CI**：41 个未格式化文件一次性排齐（固定 `clang-format 22.1.8`，与 CLion 22.0.0git 交叉验证一致），`.github/workflows/ci.yml` 新增 `formatting` 门禁；编译失败用例的判定换成 `RunCompileFailTest.cmake` 并给所有用例加了超时（§4、§9）。
+- CI 的 `build-and-test` 在原有三档之外补了 Release 一档，与本地验证配置同步。
+
+**测试规模（M11 之后）**：245 个 `TEST_CASE` / 1508 条断言 + 6 个 CTest 用例，四种配置（Debug、Release、`-Werror`、ASan+UBSan）全部通过。
 
 ### 下一步 — 未做的部分
 

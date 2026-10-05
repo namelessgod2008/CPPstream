@@ -67,3 +67,25 @@ jobs:
 
       - name: Test
         run: ctest --test-dir build --output-on-failure
+
+  formatting:
+    name: clang-format
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      # Pinned so the gate is deterministic: --Werror reports a diff when a file
+      # would be reformatted, and a floating version could make that flip. 22.1.8
+      # was cross-checked against the clang-format CLion ships (22.0.0git) and the
+      # two agree on every file in the tree.
+      - name: Install clang-format 22.1.8
+        run: |
+          python3 -m pip install --user "clang-format==22.1.8"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Check formatting
+        run: |
+          find include tests examples -type f \( -name '*.h' -o -name '*.cpp' \) \
+            | grep -v third_party | sort \
+            | xargs clang-format --dry-run --Werror

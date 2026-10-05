@@ -1,6 +1,6 @@
-#include <doctest/doctest.h>
-
 #include <cppstream/cppstream.h>
+
+#include <doctest/doctest.h>
 
 #include <algorithm>
 #include <cstddef>
@@ -17,8 +17,7 @@ struct Person {
 
 }  // namespace
 
-TEST_CASE("naturalOrder and reverseOrder follow Comparable's sign contract")
-{
+TEST_CASE("naturalOrder and reverseOrder follow Comparable's sign contract") {
     const auto ascending = cppstream::Comparator<int>::naturalOrder();
     CHECK(ascending.compare(1, 2) < 0);
     CHECK(ascending.compare(2, 1) > 0);
@@ -30,8 +29,7 @@ TEST_CASE("naturalOrder and reverseOrder follow Comparable's sign contract")
     CHECK(descending.compare("a", "a") == 0);
 }
 
-TEST_CASE("a Comparator can be built directly from a lambda")
-{
+TEST_CASE("a Comparator can be built directly from a lambda") {
     const cppstream::Comparator<int> byAbsoluteValue([](const int& left, const int& right) {
         const auto magnitude = [](int value) { return value < 0 ? -value : value; };
         if (magnitude(left) < magnitude(right)) {
@@ -48,8 +46,7 @@ TEST_CASE("a Comparator can be built directly from a lambda")
     CHECK(byAbsoluteValue.compare(-3, 3) == 0);
 }
 
-TEST_CASE("reversed flips the ordering and is its own inverse")
-{
+TEST_CASE("reversed flips the ordering and is its own inverse") {
     const auto ascending = cppstream::Comparator<int>::naturalOrder();
 
     CHECK(ascending.reversed().compare(1, 2) > 0);
@@ -57,8 +54,7 @@ TEST_CASE("reversed flips the ordering and is its own inverse")
     CHECK(ascending.reversed().reversed().compare(1, 2) < 0);
 }
 
-TEST_CASE("operator() makes a Comparator usable as a strict weak ordering")
-{
+TEST_CASE("operator() makes a Comparator usable as a strict weak ordering") {
     const auto comparator = cppstream::Comparator<int>::naturalOrder();
 
     std::vector<int> values{3, 1, 4, 1, 5, 9, 2, 6};
@@ -69,10 +65,9 @@ TEST_CASE("operator() makes a Comparator usable as a strict weak ordering")
     CHECK(std::equal(values.begin(), values.end(), expected.begin()));
 }
 
-TEST_CASE("comparing extracts a key and orders by its natural ordering")
-{
-    const auto byName = cppstream::Comparator<Person>::comparing(
-        [](const Person& person) { return person.name; });
+TEST_CASE("comparing extracts a key and orders by its natural ordering") {
+    const auto byName =
+        cppstream::Comparator<Person>::comparing([](const Person& person) { return person.name; });
 
     const Person alice{.name = "alice", .age = 30};
     const Person bob{.name = "bob", .age = 25};
@@ -82,22 +77,20 @@ TEST_CASE("comparing extracts a key and orders by its natural ordering")
     CHECK(byName.compare(alice, Person{"alice", 99}) == 0);
 }
 
-TEST_CASE("comparing accepts an explicit key comparator")
-{
-    const auto oldestFirst = cppstream::Comparator<Person>::comparing(
-        [](const Person& person) { return person.age; },
-        cppstream::Comparator<int>::reverseOrder());
+TEST_CASE("comparing accepts an explicit key comparator") {
+    const auto oldestFirst =
+        cppstream::Comparator<Person>::comparing([](const Person& person) { return person.age; },
+                                                 cppstream::Comparator<int>::reverseOrder());
 
     CHECK(oldestFirst.compare(Person{"a", 40}, Person{"b", 30}) < 0);
     CHECK(oldestFirst.compare(Person{"a", 30}, Person{"b", 40}) > 0);
 }
 
-TEST_CASE("thenComparing only consults the tie-breaker when keys are equal")
-{
-    const auto byName = cppstream::Comparator<Person>::comparing(
-        [](const Person& person) { return person.name; });
-    const auto byNameThenAge = byName.thenComparing(
-        [](const Person& person) { return person.age; });
+TEST_CASE("thenComparing only consults the tie-breaker when keys are equal") {
+    const auto byName =
+        cppstream::Comparator<Person>::comparing([](const Person& person) { return person.name; });
+    const auto byNameThenAge =
+        byName.thenComparing([](const Person& person) { return person.age; });
 
     const Person alice30{.name = "alice", .age = 30};
     const Person alice40{.name = "alice", .age = 40};
@@ -111,34 +104,32 @@ TEST_CASE("thenComparing only consults the tie-breaker when keys are equal")
     CHECK(byNameThenAge.compare(bob25, alice40) > 0);
 }
 
-TEST_CASE("thenComparing accepts an explicit key comparator and a full Comparator")
-{
-    const auto byName = cppstream::Comparator<Person>::comparing(
-        [](const Person& person) { return person.name; });
+TEST_CASE("thenComparing accepts an explicit key comparator and a full Comparator") {
+    const auto byName =
+        cppstream::Comparator<Person>::comparing([](const Person& person) { return person.name; });
 
-    const auto nameThenAgeDescending = byName.thenComparing(
-        [](const Person& person) { return person.age; },
-        cppstream::Comparator<int>::reverseOrder());
+    const auto nameThenAgeDescending =
+        byName.thenComparing([](const Person& person) { return person.age; },
+                             cppstream::Comparator<int>::reverseOrder());
 
     CHECK(nameThenAgeDescending.compare(Person{"alice", 30}, Person{"alice", 40}) > 0);
     CHECK(nameThenAgeDescending.compare(Person{"alice", 40}, Person{"alice", 30}) < 0);
 
     // A whole comparator is accepted directly, not just a key extractor.
-    const auto byAge = cppstream::Comparator<Person>::comparing(
-        [](const Person& person) { return person.age; });
+    const auto byAge =
+        cppstream::Comparator<Person>::comparing([](const Person& person) { return person.age; });
     const auto nameThenAge = byName.thenComparing(byAge);
     CHECK(nameThenAge.compare(Person{"alice", 30}, Person{"alice", 40}) < 0);
 }
 
-TEST_CASE("nullsFirst and nullsLast order the null pointer explicitly")
-{
+TEST_CASE("nullsFirst and nullsLast order the null pointer explicitly") {
     const int one = 1;
     const int two = 2;
     const int* const pointerToOne = &one;
     const int* const pointerToTwo = &two;
 
-    const auto byPointedToValue = cppstream::Comparator<const int*>(
-        [](const int* left, const int* right) {
+    const auto byPointedToValue =
+        cppstream::Comparator<const int*>([](const int* left, const int* right) {
             if (*left < *right) {
                 return -1;
             }

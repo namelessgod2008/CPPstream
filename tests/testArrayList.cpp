@@ -1,6 +1,6 @@
-#include <doctest/doctest.h>
-
 #include <cppstream/cppstream.h>
+
+#include <doctest/doctest.h>
 
 #include <algorithm>
 #include <concepts>
@@ -18,8 +18,7 @@ namespace {
 
 }  // namespace
 
-TEST_CASE("ArrayList provides the Java List surface")
-{
+TEST_CASE("ArrayList provides the Java List surface") {
     cppstream::ArrayList<std::string> names;
 
     CHECK(names.isEmpty());
@@ -48,8 +47,7 @@ TEST_CASE("ArrayList provides the Java List surface")
     CHECK_FALSE(names.remove("alicia"));
 }
 
-TEST_CASE("braced initialisation is a list, parenthesised is a capacity")
-{
+TEST_CASE("braced initialisation is a list, parenthesised is a capacity") {
     const cppstream::ArrayList<int> oneElement{5};
     CHECK(oneElement.size() == 1);
     CHECK(oneElement.get(0) == 5);
@@ -70,8 +68,7 @@ TEST_CASE("braced initialisation is a list, parenthesised is a capacity")
     CHECK_THROWS_AS(cppstream::ArrayList<int>(-1), cppstream::IllegalArgumentException);
 }
 
-TEST_CASE("AbstractCollection algorithms are built from the iterator alone")
-{
+TEST_CASE("AbstractCollection algorithms are built from the iterator alone") {
     cppstream::ArrayList<int> values{1, 2, 3, 4, 5};
 
     CHECK(values.removeIf([](int value) { return value % 2 == 0; }));
@@ -96,8 +93,7 @@ TEST_CASE("AbstractCollection algorithms are built from the iterator alone")
     CHECK(values.size() == 0);
 }
 
-TEST_CASE("equals is element-wise in order and hashCode is the ordered 31* fold")
-{
+TEST_CASE("equals is element-wise in order and hashCode is the ordered 31* fold") {
     const cppstream::ArrayList<int> left{1, 2, 3};
     const cppstream::ArrayList<int> same{1, 2, 3};
     const cppstream::ArrayList<int> reordered{3, 2, 1};
@@ -116,8 +112,7 @@ TEST_CASE("equals is element-wise in order and hashCode is the ordered 31* fold"
     CHECK(left.hashCode() != reordered.hashCode());
 }
 
-TEST_CASE("element types need neither operator== nor std::hash")
-{
+TEST_CASE("element types need neither operator== nor std::hash") {
     struct Plain {
         int value;
     };
@@ -137,13 +132,13 @@ TEST_CASE("element types need neither operator== nor std::hash")
     CHECK(values.hashCode() != 0U);
 }
 
-TEST_CASE("index problems raise Java's exception type and message")
-{
+TEST_CASE("index problems raise Java's exception type and message") {
     cppstream::ArrayList<int> values{1, 2, 3};
     const std::string expected = "Index 5 out of bounds for length 3";
 
     CHECK_THROWS_WITH_AS(values.get(5), expected.c_str(), cppstream::IndexOutOfBoundsException);
-    CHECK_THROWS_WITH_AS(values.removeAt(5), expected.c_str(), cppstream::IndexOutOfBoundsException);
+    CHECK_THROWS_WITH_AS(values.removeAt(5), expected.c_str(),
+                         cppstream::IndexOutOfBoundsException);
     CHECK_THROWS_WITH_AS(values.set(5, 1), expected.c_str(), cppstream::IndexOutOfBoundsException);
 
     CHECK_THROWS_AS(values.get(-1), cppstream::IndexOutOfBoundsException);
@@ -152,8 +147,7 @@ TEST_CASE("index problems raise Java's exception type and message")
     CHECK_THROWS_AS(values.get(5), cppstream::IllegalArgumentException);
 }
 
-TEST_CASE("collections reject null for pointer element types")
-{
+TEST_CASE("collections reject null for pointer element types") {
     cppstream::ArrayList<int*> pointers;
     int value = 1;
     CHECK(pointers.add(&value));
@@ -163,8 +157,7 @@ TEST_CASE("collections reject null for pointer element types")
     CHECK_THROWS_AS(pointers.add(nullPointer), cppstream::NullPointerException);
 }
 
-TEST_CASE("subList is a live view, addAll inserts, sort reorders")
-{
+TEST_CASE("subList is a live view, addAll inserts, sort reorders") {
     cppstream::ArrayList<int> values{5, 3, 1, 4, 2};
 
     const auto middle = values.subList(1, 3);
@@ -181,14 +174,11 @@ TEST_CASE("subList is a live view, addAll inserts, sort reorders")
     values.sort(cppstream::Comparator<int>::naturalOrder());
     CHECK(sameValues(values.toArray(), {1, 2, 4, 5, 7, 8, 30}));
 
-    CHECK_THROWS_AS(static_cast<void>(values.subList(-1, 2)),
-        cppstream::IndexOutOfBoundsException);
-    CHECK_THROWS_AS(static_cast<void>(values.subList(3, 1)),
-        cppstream::IndexOutOfBoundsException);
+    CHECK_THROWS_AS(static_cast<void>(values.subList(-1, 2)), cppstream::IndexOutOfBoundsException);
+    CHECK_THROWS_AS(static_cast<void>(values.subList(3, 1)), cppstream::IndexOutOfBoundsException);
 }
 
-TEST_CASE("iterators walk the list and fail fast on structural modification")
-{
+TEST_CASE("iterators walk the list and fail fast on structural modification") {
     cppstream::ArrayList<int> values{1, 2, 3};
 
     auto iter = values.iterator();
@@ -200,8 +190,7 @@ TEST_CASE("iterators walk the list and fail fast on structural modification")
     CHECK_THROWS_AS(iter->next(), cppstream::ConcurrentModificationException);
 }
 
-TEST_CASE("the read-only iterator refuses to remove")
-{
+TEST_CASE("the read-only iterator refuses to remove") {
     cppstream::ArrayList<int> values{1, 2, 3};
 
     auto iter = values.constIterator();
@@ -209,8 +198,7 @@ TEST_CASE("the read-only iterator refuses to remove")
     CHECK_THROWS_AS(iter->remove(), cppstream::UnsupportedOperationException);
 }
 
-TEST_CASE("forEachRemaining drains the iterator")
-{
+TEST_CASE("forEachRemaining drains the iterator") {
     cppstream::ArrayList<int> values{1, 2, 3};
 
     std::vector<int> seen;
@@ -221,8 +209,7 @@ TEST_CASE("forEachRemaining drains the iterator")
     CHECK_FALSE(iter->hasNext());
 }
 
-TEST_CASE("listIterator walks both ways and edits in place")
-{
+TEST_CASE("listIterator walks both ways and edits in place") {
     cppstream::ArrayList<int> values{1, 2, 3};
 
     auto iter = values.listIterator();
@@ -257,8 +244,7 @@ TEST_CASE("listIterator walks both ways and edits in place")
     CHECK_THROWS_AS(iter->previous(), cppstream::NoSuchElementException);
 }
 
-TEST_CASE("range-for and std::ranges work through the read-only path")
-{
+TEST_CASE("range-for and std::ranges work through the read-only path") {
     cppstream::ArrayList<int> values{1, 2, 3, 4};
 
     int total = 0;
@@ -282,8 +268,7 @@ TEST_CASE("range-for and std::ranges work through the read-only path")
     CHECK(std::ranges::find(values, 3) != std::ranges::end(values));
 }
 
-TEST_CASE("forEach hands out mutable references")
-{
+TEST_CASE("forEach hands out mutable references") {
     cppstream::ArrayList<int> values{1, 2, 3};
 
     values.forEach([](int& value) { value *= 10; });
@@ -291,8 +276,7 @@ TEST_CASE("forEach hands out mutable references")
     CHECK(sameValues(values.toArray(), {10, 20, 30}));
 }
 
-TEST_CASE("a container stream yields copies, not aliases into the container")
-{
+TEST_CASE("a container stream yields copies, not aliases into the container") {
     cppstream::ArrayList<int> values{1, 2, 3};
 
     const auto squares = values.stream().peek([](int& value) { value *= value; }).toArray();
@@ -307,15 +291,14 @@ TEST_CASE("a container stream yields copies, not aliases into the container")
     CHECK(values.get(2) == 3);
 }
 
-TEST_CASE("a container stream is lazy and fails fast if the container changes")
-{
+TEST_CASE("a container stream is lazy and fails fast if the container changes") {
     cppstream::ArrayList<int> values{1, 2, 3};
 
     auto stream = values.stream();
     values.add(4);
 
-    CHECK_THROWS_AS(
-        static_cast<void>(std::move(stream).count()), cppstream::ConcurrentModificationException);
+    CHECK_THROWS_AS(static_cast<void>(std::move(stream).count()),
+                    cppstream::ConcurrentModificationException);
 
     auto fresh = values.stream();
     CHECK(std::move(fresh).count() == 4);

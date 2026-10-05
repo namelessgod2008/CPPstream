@@ -116,9 +116,7 @@ public:
     /// Comparator<T> that its compare() contract belongs to. That return type is
     /// what lets a view report the reversed ordering when it is descending, so the
     /// two spellings agree.
-    [[nodiscard]] Comparator<T> comparator() const {
-        return comparatorFrom<T>(tree_.key_comp());
-    }
+    [[nodiscard]] Comparator<T> comparator() const { return comparatorFrom<T>(tree_.key_comp()); }
 
     /// Java: NavigableSet.first().
     [[nodiscard]] const T& first() const {
@@ -199,8 +197,8 @@ public:
     [[nodiscard]] TreeSetRangeView<T, Compare> subSet(const T& fromElement, const T& toElement);
 
     /// Java: NavigableSet.subSet(from, fromInclusive, to, toInclusive).
-    [[nodiscard]] TreeSetRangeView<T, Compare> subSet(
-        const T& fromElement, bool fromInclusive, const T& toElement, bool toInclusive);
+    [[nodiscard]] TreeSetRangeView<T, Compare> subSet(const T& fromElement, bool fromInclusive,
+                                                      const T& toElement, bool toInclusive);
 
     /// Java: NavigableSet.headSet(to) -- everything strictly below to.
     [[nodiscard]] TreeSetRangeView<T, Compare> headSet(const T& toElement);
@@ -217,9 +215,10 @@ public:
     /// The read-only forms, built from a const set. Every mutator on the view
     /// they return throws UnsupportedOperationException, mirroring Java's
     /// Collections.unmodifiableNavigableSet(set).subSet(...) chain.
-    [[nodiscard]] TreeSetRangeView<T, Compare> subSet(const T& fromElement, const T& toElement) const;
-    [[nodiscard]] TreeSetRangeView<T, Compare> subSet(
-        const T& fromElement, bool fromInclusive, const T& toElement, bool toInclusive) const;
+    [[nodiscard]] TreeSetRangeView<T, Compare> subSet(const T& fromElement,
+                                                      const T& toElement) const;
+    [[nodiscard]] TreeSetRangeView<T, Compare> subSet(const T& fromElement, bool fromInclusive,
+                                                      const T& toElement, bool toInclusive) const;
     [[nodiscard]] TreeSetRangeView<T, Compare> headSet(const T& toElement) const;
     [[nodiscard]] TreeSetRangeView<T, Compare> headSet(const T& toElement, bool inclusive) const;
     [[nodiscard]] TreeSetRangeView<T, Compare> tailSet(const T& fromElement) const;
@@ -227,7 +226,9 @@ public:
 
     /// Sorted in ascending order by Compare, so this is a copy of the backing
     /// storage rather than a hash traversal.
-    [[nodiscard]] std::vector<T> toSortedVector() const { return std::vector<T>(tree_.begin(), tree_.end()); }
+    [[nodiscard]] std::vector<T> toSortedVector() const {
+        return std::vector<T>(tree_.begin(), tree_.end());
+    }
 
     // --- Descending traversal ----------------------------------------------
 
@@ -441,16 +442,24 @@ public:
     /// tailSet/descendingSet. The fences are always the *ascending* pair; only the
     /// direction flag distinguishes an ascending window from a descending one.
     TreeSetRangeView(TreeSet<T, Compare>& backing, std::optional<T> from, bool fromInclusive,
-        std::optional<T> to, bool toInclusive, bool descending = false)
-        : backing_(&backing), writableBacking_(&backing), from_(std::move(from)),
-          to_(std::move(to)), fromInclusive_(fromInclusive), toInclusive_(toInclusive),
+                     std::optional<T> to, bool toInclusive, bool descending = false)
+        : backing_(&backing),
+          writableBacking_(&backing),
+          from_(std::move(from)),
+          to_(std::move(to)),
+          fromInclusive_(fromInclusive),
+          toInclusive_(toInclusive),
           descending_(descending) {}
 
     /// The read-only form, built by the const overloads.
     TreeSetRangeView(const TreeSet<T, Compare>& backing, std::optional<T> from, bool fromInclusive,
-        std::optional<T> to, bool toInclusive, bool descending = false)
-        : backing_(&backing), from_(std::move(from)), to_(std::move(to)),
-          fromInclusive_(fromInclusive), toInclusive_(toInclusive), descending_(descending) {}
+                     std::optional<T> to, bool toInclusive, bool descending = false)
+        : backing_(&backing),
+          from_(std::move(from)),
+          to_(std::move(to)),
+          fromInclusive_(fromInclusive),
+          toInclusive_(toInclusive),
+          descending_(descending) {}
 
     /// Reports the backing tree's count rather than the view's own: iterating this
     /// view is iterating that tree, so any structural change to the tree has to
@@ -532,14 +541,10 @@ public:
     /// view's own order*, so a descending view answers with the window's largest.
     /// Throws NoSuchElementException when the window is empty, which is why the
     /// internal helpers answer with Optional instead.
-    [[nodiscard]] const T& first() const {
-        return descending_ ? windowLast() : windowFirst();
-    }
+    [[nodiscard]] const T& first() const { return descending_ ? windowLast() : windowFirst(); }
 
     /// Java: NavigableSet.last().
-    [[nodiscard]] const T& last() const {
-        return descending_ ? windowFirst() : windowLast();
-    }
+    [[nodiscard]] const T& last() const { return descending_ ? windowFirst() : windowLast(); }
 
     /// Java: NavigableSet.pollFirst(). An empty window yields empty and changes
     /// nothing, where first() would throw. A descending view polls the window's
@@ -591,14 +596,14 @@ public:
     /// The new window may not widen this one, exactly as Java's SubSet requires,
     /// and on a descending view "from" is the *upper* end, so the two bounds are
     /// stored the other way round while the view keeps its direction.
-    [[nodiscard]] TreeSetRangeView subSet(
-        const T& fromElement, bool fromInclusive, const T& toElement, bool toInclusive) {
+    [[nodiscard]] TreeSetRangeView subSet(const T& fromElement, bool fromInclusive,
+                                          const T& toElement, bool toInclusive) {
         requireAcceptableWindow(fromElement, fromInclusive, toElement, toInclusive);
         return makeSubWindowFor(fromElement, fromInclusive, toElement, toInclusive);
     }
 
-    [[nodiscard]] TreeSetRangeView subSet(
-        const T& fromElement, bool fromInclusive, const T& toElement, bool toInclusive) const {
+    [[nodiscard]] TreeSetRangeView subSet(const T& fromElement, bool fromInclusive,
+                                          const T& toElement, bool toInclusive) const {
         requireAcceptableWindow(fromElement, fromInclusive, toElement, toInclusive);
         return makeReadOnlySubWindowFor(fromElement, fromInclusive, toElement, toInclusive);
     }
@@ -626,8 +631,8 @@ public:
     [[nodiscard]] TreeSetRangeView headSet(const T& toElement, bool inclusive) const {
         requireAcceptedBound(toElement, inclusive, "toKey out of range");
         if (descending_) {
-            return TreeSetRangeView(
-                *backing_, toElement, inclusive, to_, toInclusive_, descending_);
+            return TreeSetRangeView(*backing_, toElement, inclusive, to_, toInclusive_,
+                                    descending_);
         }
         return TreeSetRangeView(*backing_, from_, fromInclusive_, toElement, inclusive);
     }
@@ -652,8 +657,8 @@ public:
     [[nodiscard]] TreeSetRangeView tailSet(const T& fromElement, bool inclusive) const {
         requireAcceptedBound(fromElement, inclusive, "fromKey out of range");
         if (descending_) {
-            return TreeSetRangeView(
-                *backing_, from_, fromInclusive_, fromElement, inclusive, descending_);
+            return TreeSetRangeView(*backing_, from_, fromInclusive_, fromElement, inclusive,
+                                    descending_);
         }
         return TreeSetRangeView(*backing_, fromElement, inclusive, to_, toInclusive_);
     }
@@ -668,13 +673,10 @@ public:
 
     /// Java: NavigableSet.descendingSet() on a view. The same window, walked the
     /// other way; a second call gives the original order back, as it does in Java.
-    [[nodiscard]] TreeSetRangeView descendingSet() {
-        return makeFlippedWindow();
-    }
+    [[nodiscard]] TreeSetRangeView descendingSet() { return makeFlippedWindow(); }
 
     [[nodiscard]] TreeSetRangeView descendingSet() const {
-        return TreeSetRangeView(
-            *backing_, from_, fromInclusive_, to_, toInclusive_, !descending_);
+        return TreeSetRangeView(*backing_, from_, fromInclusive_, to_, toInclusive_, !descending_);
     }
 
     /// Java: NavigableSet.descendingIterator(). Note this is the *opposite* of the
@@ -697,7 +699,8 @@ public:
         /// but is flipped by descendingIterator(). It is a parameter rather than a
         /// second owner because a flipped walk must not point at a temporary view.
         explicit TreeSetRangeConstIterator(const TreeSetRangeView& owner, bool descending)
-            : owner_(&owner), descending_(descending),
+            : owner_(&owner),
+              descending_(descending),
               cursor_(descending ? owner.pastLastInRange() : owner.firstInRange()),
               expectedModCount_(owner.backingModCount()) {}
 
@@ -733,7 +736,8 @@ public:
     class TreeSetRangeIterator final : public Iterator<T> {
     public:
         explicit TreeSetRangeIterator(TreeSetRangeView& owner, bool descending)
-            : owner_(&owner), descending_(descending),
+            : owner_(&owner),
+              descending_(descending),
               cursor_(descending ? owner.pastLastInRangeForWrite() : owner.firstInRangeForWrite()),
               expectedModCount_(owner.backingModCount()) {}
 
@@ -792,19 +796,22 @@ private:
     /// exactly as Java's wrapper does. Which backing to carry is the whole
     /// decision; the new fences are already known to lie inside this window.
     [[nodiscard]] TreeSetRangeView makeSubWindow(const std::optional<T>& from, bool fromInclusive,
-        const std::optional<T>& to, bool toInclusive) const {
+                                                 const std::optional<T>& to,
+                                                 bool toInclusive) const {
         if (writableBacking_ == nullptr) {
             return TreeSetRangeView(*backing_, from, fromInclusive, to, toInclusive, descending_);
         }
-        return TreeSetRangeView(
-            *writableBacking_, from, fromInclusive, to, toInclusive, descending_);
+        return TreeSetRangeView(*writableBacking_, from, fromInclusive, to, toInclusive,
+                                descending_);
     }
 
     /// subSet()'s window, with the two bounds stored ascending whichever way this
     /// view walks: Java's DescendingSubMap passes the pair to its base constructor
     /// in the opposite order for exactly this reason.
     [[nodiscard]] TreeSetRangeView makeSubWindowFor(const std::optional<T>& fromElement,
-        bool fromInclusive, const std::optional<T>& toElement, bool toInclusive) const {
+                                                    bool fromInclusive,
+                                                    const std::optional<T>& toElement,
+                                                    bool toInclusive) const {
         if (descending_) {
             // The reversal is the point: the two bounds have to come out stored
             // ascending whichever way this view walks. See the note above.
@@ -817,23 +824,25 @@ private:
     /// The same, forced read-only. Used by the const overloads, which must not hand
     /// out a writable window however writable this one happens to be.
     [[nodiscard]] TreeSetRangeView makeReadOnlySubWindowFor(const std::optional<T>& fromElement,
-        bool fromInclusive, const std::optional<T>& toElement, bool toInclusive) const {
+                                                            bool fromInclusive,
+                                                            const std::optional<T>& toElement,
+                                                            bool toInclusive) const {
         if (descending_) {
-            return TreeSetRangeView(
-                *backing_, toElement, toInclusive, fromElement, fromInclusive, descending_);
+            return TreeSetRangeView(*backing_, toElement, toInclusive, fromElement, fromInclusive,
+                                    descending_);
         }
-        return TreeSetRangeView(
-            *backing_, fromElement, fromInclusive, toElement, toInclusive, descending_);
+        return TreeSetRangeView(*backing_, fromElement, fromInclusive, toElement, toInclusive,
+                                descending_);
     }
 
     /// The same window walked the other way -- descendingSet().
     [[nodiscard]] TreeSetRangeView makeFlippedWindow() const {
         if (writableBacking_ == nullptr) {
-            return TreeSetRangeView(
-                *backing_, from_, fromInclusive_, to_, toInclusive_, !descending_);
+            return TreeSetRangeView(*backing_, from_, fromInclusive_, to_, toInclusive_,
+                                    !descending_);
         }
-        return TreeSetRangeView(
-            *writableBacking_, from_, fromInclusive_, to_, toInclusive_, !descending_);
+        return TreeSetRangeView(*writableBacking_, from_, fromInclusive_, to_, toInclusive_,
+                                !descending_);
     }
 
     /// The one place a read-only view is rejected. Everything writable funnels here.
@@ -861,9 +870,7 @@ private:
     /// The tree's own ordering as the type-erased Comparator<T> whose
     /// compare() contract is Java's. Reversing *that* is what gives a descending
     /// view a comparator that reports the order it actually walks in.
-    [[nodiscard]] Comparator<T> asComparator() const {
-        return comparatorFrom<T>(comparatorOf());
-    }
+    [[nodiscard]] Comparator<T> asComparator() const { return comparatorFrom<T>(comparatorOf()); }
 
     /// The four lookups as the *ascending* window answers them. floor/lower/
     /// ceiling/higher pick a pair out of these, which is how a descending view
@@ -984,14 +991,15 @@ private:
     }
 
     void requireAcceptableWindow(const T& fromElement, bool fromInclusive, const T& toElement,
-        bool toInclusive) const {
+                                 bool toInclusive) const {
         requireAcceptedBound(fromElement, fromInclusive, "fromKey out of range");
         requireAcceptedBound(toElement, toInclusive, "toKey out of range");
         // Java tests the *ascending* pair, because that is what its submap
         // constructor is handed: for a descending window the arguments arrive
         // swapped, so "from > to" flips with them.
         const Compare& less = comparatorOf();
-        const bool backwards = descending_ ? less(fromElement, toElement) : less(toElement, fromElement);
+        const bool backwards =
+            descending_ ? less(fromElement, toElement) : less(toElement, fromElement);
         if (backwards) {
             throw IllegalArgumentException("fromKey > toKey");
         }
@@ -1153,8 +1161,8 @@ TreeSetRangeView<T, Compare> TreeSet<T, Compare>::descendingSet() const {
 }
 
 template <class T, class Compare>
-TreeSetRangeView<T, Compare> TreeSet<T, Compare>::subSet(
-    const T& fromElement, bool fromInclusive, const T& toElement, bool toInclusive) {
+TreeSetRangeView<T, Compare> TreeSet<T, Compare>::subSet(const T& fromElement, bool fromInclusive,
+                                                         const T& toElement, bool toInclusive) {
     this->requireNonNull(fromElement);
     this->requireNonNull(toElement);
     const Compare& less = tree_.key_comp();
@@ -1165,8 +1173,9 @@ TreeSetRangeView<T, Compare> TreeSet<T, Compare>::subSet(
 }
 
 template <class T, class Compare>
-TreeSetRangeView<T, Compare> TreeSet<T, Compare>::subSet(
-    const T& fromElement, bool fromInclusive, const T& toElement, bool toInclusive) const {
+TreeSetRangeView<T, Compare> TreeSet<T, Compare>::subSet(const T& fromElement, bool fromInclusive,
+                                                         const T& toElement,
+                                                         bool toInclusive) const {
     this->requireNonNull(fromElement);
     this->requireNonNull(toElement);
     const Compare& less = tree_.key_comp();
@@ -1177,14 +1186,13 @@ TreeSetRangeView<T, Compare> TreeSet<T, Compare>::subSet(
 }
 
 template <class T, class Compare>
-TreeSetRangeView<T, Compare> TreeSet<T, Compare>::subSet(
-    const T& fromElement, const T& toElement) {
+TreeSetRangeView<T, Compare> TreeSet<T, Compare>::subSet(const T& fromElement, const T& toElement) {
     return subSet(fromElement, true, toElement, false);
 }
 
 template <class T, class Compare>
-TreeSetRangeView<T, Compare> TreeSet<T, Compare>::subSet(
-    const T& fromElement, const T& toElement) const {
+TreeSetRangeView<T, Compare> TreeSet<T, Compare>::subSet(const T& fromElement,
+                                                         const T& toElement) const {
     return subSet(fromElement, true, toElement, false);
 }
 
@@ -1195,8 +1203,8 @@ TreeSetRangeView<T, Compare> TreeSet<T, Compare>::headSet(const T& toElement, bo
 }
 
 template <class T, class Compare>
-TreeSetRangeView<T, Compare> TreeSet<T, Compare>::headSet(
-    const T& toElement, bool inclusive) const {
+TreeSetRangeView<T, Compare> TreeSet<T, Compare>::headSet(const T& toElement,
+                                                          bool inclusive) const {
     this->requireNonNull(toElement);
     return TreeSetRangeView<T, Compare>(*this, std::nullopt, true, toElement, inclusive);
 }
@@ -1218,8 +1226,8 @@ TreeSetRangeView<T, Compare> TreeSet<T, Compare>::tailSet(const T& fromElement, 
 }
 
 template <class T, class Compare>
-TreeSetRangeView<T, Compare> TreeSet<T, Compare>::tailSet(
-    const T& fromElement, bool inclusive) const {
+TreeSetRangeView<T, Compare> TreeSet<T, Compare>::tailSet(const T& fromElement,
+                                                          bool inclusive) const {
     this->requireNonNull(fromElement);
     return TreeSetRangeView<T, Compare>(*this, fromElement, inclusive, std::nullopt, false);
 }

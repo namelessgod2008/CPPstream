@@ -16,8 +16,7 @@
 // clamp the same way. See DESIGN.md section 9 for the harness.
 // ---------------------------------------------------------------------------
 
-TEST_CASE("TreeSet range views are live windows, not copies")
-{
+TEST_CASE("TreeSet range views are live windows, not copies") {
     cppstream::TreeSet<int> values{10, 20, 30, 40, 50};
     auto window = values.subSet(20, 40);  // [20, 40)
 
@@ -44,8 +43,7 @@ TEST_CASE("TreeSet range views are live windows, not copies")
     CHECK(window.modCount() == values.modCount());
 }
 
-TEST_CASE("TreeSet range views reject writes outside the window")
-{
+TEST_CASE("TreeSet range views reject writes outside the window") {
     cppstream::TreeSet<int> values{10, 20, 30, 40, 50};
     auto window = values.subSet(20, 40);
 
@@ -63,8 +61,7 @@ TEST_CASE("TreeSet range views reject writes outside the window")
     CHECK_FALSE(values.contains(45));
 }
 
-TEST_CASE("TreeSet range views clear only their window")
-{
+TEST_CASE("TreeSet range views clear only their window") {
     cppstream::TreeSet<int> values{10, 20, 30, 40, 50};
     auto window = values.subSet(20, 40);
 
@@ -74,8 +71,7 @@ TEST_CASE("TreeSet range views clear only their window")
     CHECK(window.size() == 0);
 }
 
-TEST_CASE("TreeSet range views navigate their own window")
-{
+TEST_CASE("TreeSet range views navigate their own window") {
     cppstream::TreeSet<int> values{10, 20, 30, 40, 50};
     auto window = values.subSet(20, 40);
 
@@ -95,8 +91,7 @@ TEST_CASE("TreeSet range views navigate their own window")
     CHECK_THROWS_AS(static_cast<void>(empty.last()), cppstream::NoSuchElementException);
 }
 
-TEST_CASE("TreeSet range view lookups clamp to the window, as Java does")
-{
+TEST_CASE("TreeSet range view lookups clamp to the window, as Java does") {
     const cppstream::TreeSet<int> values{10, 20, 30, 40, 50};
     const auto window = values.subSet(20, 40);  // [20, 40)
 
@@ -120,8 +115,7 @@ TEST_CASE("TreeSet range view lookups clamp to the window, as Java does")
     CHECK(window.higher(100).isEmpty());
 }
 
-TEST_CASE("TreeSet range view iterators walk the window and fail fast")
-{
+TEST_CASE("TreeSet range view iterators walk the window and fail fast") {
     cppstream::TreeSet<int> values{10, 20, 30, 40, 50};
     auto window = values.subSet(20, 40);
 
@@ -151,8 +145,7 @@ TEST_CASE("TreeSet range view iterators walk the window and fail fast")
     CHECK_THROWS_AS(constIterator->remove(), cppstream::UnsupportedOperationException);
 }
 
-TEST_CASE("TreeSet range views inherit Java's fence rules")
-{
+TEST_CASE("TreeSet range views inherit Java's fence rules") {
     cppstream::TreeSet<int> values{10, 20, 30, 40, 50};
     auto window = values.subSet(20, 40);  // [20, 40)
 
@@ -170,15 +163,15 @@ TEST_CASE("TreeSet range views inherit Java's fence rules")
     // Widening is rejected: beyond a fence, or equal to an exclusive one while
     // claiming to include it.
     CHECK_THROWS_AS(static_cast<void>(window.headSet(40, true)),
-        cppstream::IllegalArgumentException);
+                    cppstream::IllegalArgumentException);
     CHECK_THROWS_AS(static_cast<void>(window.headSet(10, false)),
-        cppstream::IllegalArgumentException);
+                    cppstream::IllegalArgumentException);
     CHECK_THROWS_AS(static_cast<void>(window.tailSet(45, true)),
-        cppstream::IllegalArgumentException);
+                    cppstream::IllegalArgumentException);
     CHECK_THROWS_AS(static_cast<void>(window.subSet(20, false, 40, true)),
-        cppstream::IllegalArgumentException);
+                    cppstream::IllegalArgumentException);
     CHECK_THROWS_AS(static_cast<void>(window.subSet(35, true, 25, true)),
-        cppstream::IllegalArgumentException);
+                    cppstream::IllegalArgumentException);
 
     // An inclusive upper fence accepts its own bound; an exclusive lower one
     // rejects a bound that would include it.
@@ -189,16 +182,14 @@ TEST_CASE("TreeSet range views inherit Java's fence rules")
 
     const auto exclusive = values.subSet(20, false, 40, false);
     CHECK_THROWS_AS(static_cast<void>(exclusive.tailSet(20, true)),
-        cppstream::IllegalArgumentException);
+                    cppstream::IllegalArgumentException);
     CHECK(exclusive.tailSet(20, false).toArray() == std::vector<int>{30});
 
     // The container itself rejects a window that runs backwards.
-    CHECK_THROWS_AS(static_cast<void>(values.subSet(40, 20)),
-        cppstream::IllegalArgumentException);
+    CHECK_THROWS_AS(static_cast<void>(values.subSet(40, 20)), cppstream::IllegalArgumentException);
 }
 
-TEST_CASE("range views taken from a const container are read-only")
-{
+TEST_CASE("range views taken from a const container are read-only") {
     cppstream::TreeSet<int> values{10, 20, 30, 40, 50};
     const cppstream::TreeSet<int>& readOnly = values;
     auto window = readOnly.subSet(20, 40);
@@ -211,12 +202,11 @@ TEST_CASE("range views taken from a const container are read-only")
     CHECK(window.toArray() == std::vector<int>{20, 30});
 
     CHECK_THROWS_AS(static_cast<void>(window.add(25)), cppstream::UnsupportedOperationException);
-    CHECK_THROWS_AS(static_cast<void>(window.remove(20)),
-        cppstream::UnsupportedOperationException);
+    CHECK_THROWS_AS(static_cast<void>(window.remove(20)), cppstream::UnsupportedOperationException);
     CHECK_THROWS_AS(window.clear(), cppstream::UnsupportedOperationException);
     CHECK_THROWS_AS(static_cast<void>(window.iterator()), cppstream::UnsupportedOperationException);
     CHECK_THROWS_AS(static_cast<void>(window.pollFirst()),
-        cppstream::UnsupportedOperationException);
+                    cppstream::UnsupportedOperationException);
 
     // A window onto a read-only window is read-only rather than an error, which is
     // what Collections.unmodifiableNavigableSet(set).subSet(...) does.
@@ -230,12 +220,11 @@ TEST_CASE("range views taken from a const container are read-only")
     auto constNarrow = readView.tailSet(30, true);  // the [20, 40) fence is kept
     CHECK(constNarrow.toArray() == std::vector<int>{30});
     CHECK_THROWS_AS(static_cast<void>(constNarrow.add(35)),
-        cppstream::UnsupportedOperationException);
+                    cppstream::UnsupportedOperationException);
     CHECK(values.size() == 5);
 }
 
-TEST_CASE("TreeSet range views compare as sets and stream")
-{
+TEST_CASE("TreeSet range views compare as sets and stream") {
     cppstream::TreeSet<int> values{10, 20, 30, 40, 50};
     const auto window = values.subSet(20, 40);
 
@@ -248,15 +237,14 @@ TEST_CASE("TreeSet range views compare as sets and stream")
 
     CHECK(window.stream().count() == 2);
     CHECK(window.stream().map([](int value) { return value * 2; }).toList().toArray() ==
-        std::vector<int>{40, 60});
+          std::vector<int>{40, 60});
 }
 
 // ---------------------------------------------------------------------------
 // TreeMap
 // ---------------------------------------------------------------------------
 
-TEST_CASE("TreeMap range views are live windows, not copies")
-{
+TEST_CASE("TreeMap range views are live windows, not copies") {
     cppstream::TreeMap<int, std::string> values;
     for (int key = 10; key <= 50; key += 10) {
         static_cast<void>(values.put(key, "v" + std::to_string(key)));
@@ -281,13 +269,13 @@ TEST_CASE("TreeMap range views are live windows, not copies")
     CHECK(window.entrySet().size() == 4);
 
     CHECK(window.remove(30).get() == "v30");
-    CHECK_FALSE(window.remove(10).isPresent());   // outside the window
+    CHECK_FALSE(window.remove(10).isPresent());  // outside the window
     CHECK(values.containsKey(30) == false);
     CHECK(values.containsKey(10));
 
     CHECK(window.get(25) != nullptr);
     CHECK(window.get(10) == nullptr);
-    CHECK_FALSE(window.containsKey(40));          // the upper fence is exclusive
+    CHECK_FALSE(window.containsKey(40));  // the upper fence is exclusive
     CHECK_FALSE(window.containsValue("v10"));
     CHECK(window.containsValue("v25"));
 
@@ -299,8 +287,7 @@ TEST_CASE("TreeMap range views are live windows, not copies")
     CHECK(window.comparator()(1, 2));
 }
 
-TEST_CASE("TreeMap range views reject writes outside the window")
-{
+TEST_CASE("TreeMap range views reject writes outside the window") {
     cppstream::TreeMap<int, std::string> values;
     for (int key = 10; key <= 50; key += 10) {
         static_cast<void>(values.put(key, "v" + std::to_string(key)));
@@ -309,25 +296,33 @@ TEST_CASE("TreeMap range views reject writes outside the window")
 
     CHECK_THROWS_AS(static_cast<void>(window.put(50, "x")), cppstream::IllegalArgumentException);
     CHECK_THROWS_AS(static_cast<void>(window.putIfAbsent(50, "x")),
-        cppstream::IllegalArgumentException);
-    CHECK_THROWS_AS(static_cast<void>(window.computeIfAbsent(50, [](const int&) {
-        return cppstream::Optional<std::string>::of("x");
-    })), cppstream::IllegalArgumentException);
-    CHECK_THROWS_AS(static_cast<void>(window.merge(50, "x",
-        [](const std::string& left, const std::string& right) {
-            return cppstream::Optional<std::string>::of(left + right);
-        })), cppstream::IllegalArgumentException);
+                    cppstream::IllegalArgumentException);
+    CHECK_THROWS_AS(static_cast<void>(window.computeIfAbsent(
+                        50, [](const int&) { return cppstream::Optional<std::string>::of("x"); })),
+                    cppstream::IllegalArgumentException);
+    CHECK_THROWS_AS(static_cast<void>(
+                        window.merge(50, "x",
+                                     [](const std::string& left, const std::string& right) {
+                                         return cppstream::Optional<std::string>::of(left + right);
+                                     })),
+                    cppstream::IllegalArgumentException);
 
     // computeIfPresent answers empty for a key outside the window rather than
     // throwing -- and, as in Java, the mapping outside the window is untouched.
-    CHECK(window.computeIfPresent(50, [](const int&, const std::string& value) {
-        return cppstream::Optional<std::string>::of(value + "?");
-    }).isEmpty());
+    CHECK(window
+              .computeIfPresent(50,
+                                [](const int&, const std::string& value) {
+                                    return cppstream::Optional<std::string>::of(value + "?");
+                                })
+              .isEmpty());
     CHECK(*values.get(50) == "v50");
     CHECK(*values.get(10) == "v10");
-    CHECK(window.computeIfPresent(30, [](const int&, const std::string& value) {
-        return cppstream::Optional<std::string>::of(value + "?");
-    }).get() == "v30?");
+    CHECK(window
+              .computeIfPresent(30,
+                                [](const int&, const std::string& value) {
+                                    return cppstream::Optional<std::string>::of(value + "?");
+                                })
+              .get() == "v30?");
     CHECK(*values.get(30) == "v30?");
 
     // putIfAbsent inside the window still reports the existing value.
@@ -335,8 +330,7 @@ TEST_CASE("TreeMap range views reject writes outside the window")
     CHECK(*values.get(30) == "v30?");
 }
 
-TEST_CASE("TreeMap range views clear only their window")
-{
+TEST_CASE("TreeMap range views clear only their window") {
     cppstream::TreeMap<int, std::string> values;
     for (int key = 10; key <= 50; key += 10) {
         static_cast<void>(values.put(key, "v" + std::to_string(key)));
@@ -349,8 +343,7 @@ TEST_CASE("TreeMap range views clear only their window")
     CHECK(window.isEmpty());
 }
 
-TEST_CASE("TreeMap range views navigate their own window")
-{
+TEST_CASE("TreeMap range views navigate their own window") {
     cppstream::TreeMap<int, std::string> values;
     for (int key = 10; key <= 50; key += 10) {
         static_cast<void>(values.put(key, "v" + std::to_string(key)));
@@ -374,8 +367,7 @@ TEST_CASE("TreeMap range views navigate their own window")
     CHECK_THROWS_AS(static_cast<void>(empty.lastKey()), cppstream::NoSuchElementException);
 }
 
-TEST_CASE("TreeMap range view lookups clamp to the window, as Java does")
-{
+TEST_CASE("TreeMap range view lookups clamp to the window, as Java does") {
     cppstream::TreeMap<int, std::string> values;
     for (int key = 10; key <= 50; key += 10) {
         static_cast<void>(values.put(key, "v" + std::to_string(key)));
@@ -402,8 +394,7 @@ TEST_CASE("TreeMap range view lookups clamp to the window, as Java does")
     CHECK(window.higherKey(100).isEmpty());
 }
 
-TEST_CASE("map views built on a range view fail fast against the backing map")
-{
+TEST_CASE("map views built on a range view fail fast against the backing map") {
     cppstream::TreeMap<int, std::string> values;
     for (int key = 10; key <= 50; key += 10) {
         static_cast<void>(values.put(key, "v" + std::to_string(key)));
@@ -429,8 +420,7 @@ TEST_CASE("map views built on a range view fail fast against the backing map")
     CHECK_THROWS_AS(entryIterator->next(), cppstream::ConcurrentModificationException);
 }
 
-TEST_CASE("TreeMap range views inherit Java's fence rules")
-{
+TEST_CASE("TreeMap range views inherit Java's fence rules") {
     cppstream::TreeMap<int, std::string> values;
     for (int key = 10; key <= 50; key += 10) {
         static_cast<void>(values.put(key, "v" + std::to_string(key)));
@@ -443,19 +433,17 @@ TEST_CASE("TreeMap range views inherit Java's fence rules")
     CHECK(window.tailMap(20, false).keySet().toArray() == std::vector<int>{30});
 
     CHECK_THROWS_AS(static_cast<void>(window.subMap(10, true, 30, false)),
-        cppstream::IllegalArgumentException);
+                    cppstream::IllegalArgumentException);
     CHECK_THROWS_AS(static_cast<void>(window.headMap(50, false)),
-        cppstream::IllegalArgumentException);
+                    cppstream::IllegalArgumentException);
     CHECK_THROWS_AS(static_cast<void>(window.headMap(40, true)),
-        cppstream::IllegalArgumentException);
+                    cppstream::IllegalArgumentException);
     CHECK_THROWS_AS(static_cast<void>(window.tailMap(45, true)),
-        cppstream::IllegalArgumentException);
-    CHECK_THROWS_AS(static_cast<void>(values.subMap(40, 20)),
-        cppstream::IllegalArgumentException);
+                    cppstream::IllegalArgumentException);
+    CHECK_THROWS_AS(static_cast<void>(values.subMap(40, 20)), cppstream::IllegalArgumentException);
 }
 
-TEST_CASE("range views taken from a const map are read-only")
-{
+TEST_CASE("range views taken from a const map are read-only") {
     cppstream::TreeMap<int, std::string> values;
     for (int key = 10; key <= 50; key += 10) {
         static_cast<void>(values.put(key, "v" + std::to_string(key)));
@@ -473,35 +461,34 @@ TEST_CASE("range views taken from a const map are read-only")
     const cppstream::TreeMapRangeView<int, std::string, std::less<int>>& readView = window;
     CHECK(readView.get(20) != nullptr);
     CHECK(readView.get(10) == nullptr);
-    CHECK_THROWS_AS(static_cast<void>(window.get(20)),
-        cppstream::UnsupportedOperationException);
+    CHECK_THROWS_AS(static_cast<void>(window.get(20)), cppstream::UnsupportedOperationException);
     CHECK(window.keySet().toArray() == std::vector<int>{20, 30});
 
     CHECK_THROWS_AS(static_cast<void>(window.put(25, "x")),
-        cppstream::UnsupportedOperationException);
-    CHECK_THROWS_AS(static_cast<void>(window.remove(20)),
-        cppstream::UnsupportedOperationException);
+                    cppstream::UnsupportedOperationException);
+    CHECK_THROWS_AS(static_cast<void>(window.remove(20)), cppstream::UnsupportedOperationException);
     CHECK_THROWS_AS(window.clear(), cppstream::UnsupportedOperationException);
-    CHECK_THROWS_AS(static_cast<void>(window.computeIfPresent(20,
-        [](const int&, const std::string& value) {
-            return cppstream::Optional<std::string>::of(value);
-        })), cppstream::UnsupportedOperationException);
+    CHECK_THROWS_AS(static_cast<void>(window.computeIfPresent(
+                        20,
+                        [](const int&, const std::string& value) {
+                            return cppstream::Optional<std::string>::of(value);
+                        })),
+                    cppstream::UnsupportedOperationException);
     // A window onto a read-only window is read-only rather than an error, which is
     // what Collections.unmodifiableNavigableMap(map).subMap(...) does.
     auto narrow = window.subMap(21, true, 31, false);
     CHECK(narrow.keySet().toArray() == std::vector<int>{30});
     CHECK_THROWS_AS(static_cast<void>(narrow.put(25, "x")),
-        cppstream::UnsupportedOperationException);
+                    cppstream::UnsupportedOperationException);
 
     auto constNarrow = readView.tailMap(30, true);  // the [20, 40) fence is kept
     CHECK(constNarrow.keySet().toArray() == std::vector<int>{30});
     CHECK_THROWS_AS(static_cast<void>(constNarrow.remove(30)),
-        cppstream::UnsupportedOperationException);
+                    cppstream::UnsupportedOperationException);
     CHECK(values.size() == 5);
 }
 
-TEST_CASE("TreeMap range views compare as maps")
-{
+TEST_CASE("TreeMap range views compare as maps") {
     cppstream::TreeMap<int, std::string> values;
     for (int key = 10; key <= 50; key += 10) {
         static_cast<void>(values.put(key, "v" + std::to_string(key)));

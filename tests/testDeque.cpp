@@ -7,8 +7,7 @@
 #include <string>
 #include <vector>
 
-TEST_CASE("ArrayDeque is a queue: first in, first out")
-{
+TEST_CASE("ArrayDeque is a queue: first in, first out") {
     cppstream::ArrayDeque<int> queue;
 
     CHECK(queue.isEmpty());
@@ -31,8 +30,7 @@ TEST_CASE("ArrayDeque is a queue: first in, first out")
     CHECK_THROWS_AS(static_cast<void>(queue.element()), cppstream::NoSuchElementException);
 }
 
-TEST_CASE("ArrayDeque is a stack: push and pop work on the head")
-{
+TEST_CASE("ArrayDeque is a stack: push and pop work on the head") {
     cppstream::ArrayDeque<std::string> stack;
 
     stack.push("a");
@@ -49,8 +47,7 @@ TEST_CASE("ArrayDeque is a stack: push and pop work on the head")
     CHECK_THROWS_AS(static_cast<void>(stack.pop()), cppstream::NoSuchElementException);
 }
 
-TEST_CASE("ArrayDeque is a deque: both ends stay addressable")
-{
+TEST_CASE("ArrayDeque is a deque: both ends stay addressable") {
     cppstream::ArrayDeque<int> values;
 
     values.addFirst(2);
@@ -75,8 +72,7 @@ TEST_CASE("ArrayDeque is a deque: both ends stay addressable")
     CHECK(values.toArray() == std::vector<int>{2, 3});
 }
 
-TEST_CASE("ArrayDeque removes the first or the last matching occurrence")
-{
+TEST_CASE("ArrayDeque removes the first or the last matching occurrence") {
     cppstream::ArrayDeque<int> values{1, 2, 3, 2, 1};
 
     CHECK(values.removeFirstOccurrence(2));
@@ -93,8 +89,7 @@ TEST_CASE("ArrayDeque removes the first or the last matching occurrence")
     CHECK(values.toArray() == std::vector<int>{1, 2});
 }
 
-TEST_CASE("ArrayDeque iterates forwards and backwards")
-{
+TEST_CASE("ArrayDeque iterates forwards and backwards") {
     cppstream::ArrayDeque<int> values{1, 2, 3};
 
     std::vector<int> forwards;
@@ -114,8 +109,7 @@ TEST_CASE("ArrayDeque iterates forwards and backwards")
     CHECK(values.stream().reversed().toList().toArray() == std::vector<int>{3, 2, 1});
 }
 
-TEST_CASE("ArrayDeque iterators are fail-fast and can remove")
-{
+TEST_CASE("ArrayDeque iterators are fail-fast and can remove") {
     cppstream::ArrayDeque<int> values{1, 2, 3, 4};
 
     auto iterator = values.iterator();
@@ -133,8 +127,7 @@ TEST_CASE("ArrayDeque iterators are fail-fast and can remove")
     CHECK_THROWS_AS(stale->next(), cppstream::ConcurrentModificationException);
 }
 
-TEST_CASE("a frozen ArrayDeque refuses every mutator")
-{
+TEST_CASE("a frozen ArrayDeque refuses every mutator") {
     cppstream::ArrayDeque<int> values{1, 2, 3};
     values.freeze();
 
@@ -144,9 +137,12 @@ TEST_CASE("a frozen ArrayDeque refuses every mutator")
     CHECK_THROWS_AS(values.addLast(4), cppstream::UnsupportedOperationException);
     CHECK_THROWS_AS(static_cast<void>(values.offer(4)), cppstream::UnsupportedOperationException);
     CHECK_THROWS_AS(values.push(0), cppstream::UnsupportedOperationException);
-    CHECK_THROWS_AS(static_cast<void>(values.removeFirst()), cppstream::UnsupportedOperationException);
-    CHECK_THROWS_AS(static_cast<void>(values.removeLast()), cppstream::UnsupportedOperationException);
-    CHECK_THROWS_AS(static_cast<void>(values.removeFirstOccurrence(2)), cppstream::UnsupportedOperationException);
+    CHECK_THROWS_AS(static_cast<void>(values.removeFirst()),
+                    cppstream::UnsupportedOperationException);
+    CHECK_THROWS_AS(static_cast<void>(values.removeLast()),
+                    cppstream::UnsupportedOperationException);
+    CHECK_THROWS_AS(static_cast<void>(values.removeFirstOccurrence(2)),
+                    cppstream::UnsupportedOperationException);
     CHECK_THROWS_AS(values.clear(), cppstream::UnsupportedOperationException);
 
     // Reading and draining still work: polling from an empty deque is not a
@@ -156,8 +152,7 @@ TEST_CASE("a frozen ArrayDeque refuses every mutator")
     CHECK(values.size() == 3);
 }
 
-TEST_CASE("ArrayDeque is usable through Queue, Deque and Collection references")
-{
+TEST_CASE("ArrayDeque is usable through Queue, Deque and Collection references") {
     cppstream::ArrayDeque<int> storage{1, 2, 3};
 
     cppstream::Queue<int>& queue = storage;
@@ -176,8 +171,7 @@ TEST_CASE("ArrayDeque is usable through Queue, Deque and Collection references")
     CHECK(collection.equals(storage));
 }
 
-TEST_CASE("ArrayDeque accepts a backing std::deque, a collection and an initializer list")
-{
+TEST_CASE("ArrayDeque accepts a backing std::deque, a collection and an initializer list") {
     cppstream::ArrayDeque<int> fromNodes(std::deque<int>{1, 2, 2, 3});
     CHECK(fromNodes.size() == 4);
     CHECK_FALSE(fromNodes.equals(cppstream::ArrayDeque<int>{1, 2, 3}));
@@ -193,8 +187,7 @@ TEST_CASE("ArrayDeque accepts a backing std::deque, a collection and an initiali
     CHECK(copy.toArray() == std::vector<int>{7, 8});
 }
 
-TEST_CASE("ArrayDeque rejects duplicate-free bulk operations correctly")
-{
+TEST_CASE("ArrayDeque rejects duplicate-free bulk operations correctly") {
     cppstream::ArrayDeque<int> values{1, 2, 3, 4, 5};
     const cppstream::ArrayList<int> evens{2, 4};
 
@@ -209,8 +202,7 @@ TEST_CASE("ArrayDeque rejects duplicate-free bulk operations correctly")
     CHECK(values.toArray() == std::vector<int>{1, 2});
 }
 
-TEST_CASE("LinkedList keeps deque-shaped methods without implementing Deque")
-{
+TEST_CASE("LinkedList keeps deque-shaped methods without implementing Deque") {
     // Divergence 29: List and Deque are both abstract classes here, so deriving
     // from both would need virtual inheritance through the whole hierarchy.
     cppstream::LinkedList<int> values{2, 3};

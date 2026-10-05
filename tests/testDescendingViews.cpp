@@ -66,8 +66,7 @@ template <class Apply>
 
 }  // namespace
 
-TEST_CASE("a descending set window accepts exactly the fences the JDK accepts")
-{
+TEST_CASE("a descending set window accepts exactly the fences the JDK accepts") {
     IntSet values{10, 20, 30, 40, 50};
     // The descending view of the ascending window [20, 40).
     auto window = values.subSet(20, true, 40, false).descendingSet();
@@ -101,15 +100,14 @@ TEST_CASE("a descending set window accepts exactly the fences the JDK accepts")
     CHECK(listIs(window.descendingSet().toArray(), {20, 30}));
 }
 
-TEST_CASE("a descending window rejects a backwards range the way the JDK does")
-{
+TEST_CASE("a descending window rejects a backwards range the way the JDK does") {
     IntSet values{10, 20, 30, 40, 50};
     auto descending = values.descendingSet();
 
     // Unbounded, so only the ordering itself can be wrong: "from" is the *upper*
     // end, so 20 below 40 is the backwards window.
-    CHECK_THROWS_AS(
-        static_cast<void>(descending.subSet(20, 40)), cppstream::IllegalArgumentException);
+    CHECK_THROWS_AS(static_cast<void>(descending.subSet(20, 40)),
+                    cppstream::IllegalArgumentException);
     CHECK(listIs(descending.subSet(40, true, 20, false).toArray(), {40, 30}));
     CHECK(listIs(descending.subSet(40, false, 20, false).toArray(), {30}));
 
@@ -120,8 +118,7 @@ TEST_CASE("a descending window rejects a backwards range the way the JDK does")
     CHECK(listIs(descending.tailSet(30).toArray(), {30, 20, 10}));
 }
 
-TEST_CASE("the fence messages on a descending view name the view's own parameters")
-{
+TEST_CASE("the fence messages on a descending view name the view's own parameters") {
     IntSet values{10, 20, 30, 40, 50};
     auto window = values.subSet(20, true, 40, false).descendingSet();
 
@@ -136,8 +133,7 @@ TEST_CASE("the fence messages on a descending view name the view's own parameter
     CHECK(rejection([&] { return window.subSet(20, true, 40, false); }) == "fromKey > toKey");
 }
 
-TEST_CASE("lookups on a descending window swap floor with ceiling and lower with higher")
-{
+TEST_CASE("lookups on a descending window swap floor with ceiling and lower with higher") {
     IntSet values{10, 20, 30, 40, 50};
     auto descending = values.descendingSet();
 
@@ -161,8 +157,7 @@ TEST_CASE("lookups on a descending window swap floor with ceiling and lower with
     CHECK(window.ceiling(100).get() == 30);
 }
 
-TEST_CASE("descendingSet on a container and on a view hand out views, not copies")
-{
+TEST_CASE("descendingSet on a container and on a view hand out views, not copies") {
     IntSet values{10, 20, 30};
     auto descending = values.descendingSet();
 
@@ -186,8 +181,7 @@ TEST_CASE("descendingSet on a container and on a view hand out views, not copies
     CHECK(listIs(descending.descendingSet().toArray(), {5, 10, 20, 25, 30}));
 }
 
-TEST_CASE("a descending set view fails fast when the tree changes underneath it")
-{
+TEST_CASE("a descending set view fails fast when the tree changes underneath it") {
     IntSet values{10, 20, 30};
     auto descending = values.descendingSet();
 
@@ -203,8 +197,7 @@ TEST_CASE("a descending set view fails fast when the tree changes underneath it"
     CHECK(listIs(descending.toArray(), {30, 20, 10}));
 }
 
-TEST_CASE("a descending set view removes through the window and no wider")
-{
+TEST_CASE("a descending set view removes through the window and no wider") {
     IntSet values{10, 20, 30, 40, 50};
     auto window = values.subSet(20, true, 40, false).descendingSet();  // {20, 30}
 
@@ -221,8 +214,7 @@ TEST_CASE("a descending set view removes through the window and no wider")
     CHECK(values.contains(25));
 }
 
-TEST_CASE("an accepted-but-empty descending window is empty, not a runaway walk")
-{
+TEST_CASE("an accepted-but-empty descending window is empty, not a runaway walk") {
     IntSet values{10, 20, 30, 40, 50};
     auto window = values.subSet(20, true, 40, false).descendingSet();
 
@@ -277,17 +269,17 @@ TEST_CASE("an accepted-but-empty descending window is empty, not a runaway walk"
     CHECK_THROWS_AS(static_cast<void>(emptyKeys.first()), cppstream::NoSuchElementException);
 }
 
-TEST_CASE("a descending view of a const container is read-only, and so is its window")
-{
+TEST_CASE("a descending view of a const container is read-only, and so is its window") {
     const IntSet values{10, 20, 30};
     auto descending = values.descendingSet();
 
     CHECK(listIs(descending.toArray(), {30, 20, 10}));
-    CHECK_THROWS_AS(static_cast<void>(descending.add(40)), cppstream::UnsupportedOperationException);
-    CHECK_THROWS_AS(
-        static_cast<void>(descending.remove(10)), cppstream::UnsupportedOperationException);
-    CHECK_THROWS_AS(
-        static_cast<void>(descending.pollFirst()), cppstream::UnsupportedOperationException);
+    CHECK_THROWS_AS(static_cast<void>(descending.add(40)),
+                    cppstream::UnsupportedOperationException);
+    CHECK_THROWS_AS(static_cast<void>(descending.remove(10)),
+                    cppstream::UnsupportedOperationException);
+    CHECK_THROWS_AS(static_cast<void>(descending.pollFirst()),
+                    cppstream::UnsupportedOperationException);
 
     // A window of a read-only view is a read-only view, not an exception -- the
     // Collections.unmodifiableNavigableSet(set).descendingSet().subSet(...) chain.
@@ -309,8 +301,7 @@ TEST_CASE("a descending view of a const container is read-only, and so is its wi
 // TreeMap
 // ---------------------------------------------------------------------------
 
-TEST_CASE("descendingMap is a view, and its fence rules match the JDK")
-{
+TEST_CASE("descendingMap is a view, and its fence rules match the JDK") {
     IntMap prices{{10, "a"}, {20, "b"}, {30, "c"}, {40, "d"}, {50, "e"}};
     auto descending = prices.descendingMap();
 
@@ -339,8 +330,7 @@ TEST_CASE("descendingMap is a view, and its fence rules match the JDK")
     CHECK(listIs(keysOf(window.tailMap(30, true)), {30, 25, 20}));
 }
 
-TEST_CASE("descendingMap flips the inherited key, value and entry views")
-{
+TEST_CASE("descendingMap flips the inherited key, value and entry views") {
     IntMap prices{{10, "a"}, {20, "b"}, {30, "c"}};
     auto descending = prices.descendingMap();
 
@@ -369,8 +359,7 @@ TEST_CASE("descendingMap flips the inherited key, value and entry views")
     CHECK(listIs(keysOf(prices), {20}));
 }
 
-TEST_CASE("navigableKeySet is a live NavigableSet, bounded windows included")
-{
+TEST_CASE("navigableKeySet is a live NavigableSet, bounded windows included") {
     IntMap prices{{10, "a"}, {20, "b"}, {30, "c"}, {40, "d"}, {50, "e"}};
 
     auto keys = prices.navigableKeySet();
@@ -381,16 +370,16 @@ TEST_CASE("navigableKeySet is a live NavigableSet, bounded windows included")
 
     // subSet/headSet/tailSet are windows onto the same map.
     CHECK(listIs(keys.subSet(30, true, 50, true).toArray(), {30, 40, 50}));
-    CHECK_THROWS_AS(
-        static_cast<void>(keys.subSet(50, true, 30, true)), cppstream::IllegalArgumentException);
+    CHECK_THROWS_AS(static_cast<void>(keys.subSet(50, true, 30, true)),
+                    cppstream::IllegalArgumentException);
 
     // A bounded key set answers its own fences, with the JDK's messages.
     auto window = prices.subMap(20, true, 40, false).navigableKeySet();  // {20, 30}
     CHECK(listIs(window.toArray(), {20, 30}));
-    CHECK(window.floor(5).isEmpty());          // below the window's lower fence
-    CHECK(window.floor(100).get() == 30);      // clamped to the window
+    CHECK(window.floor(5).isEmpty());      // below the window's lower fence
+    CHECK(window.floor(100).get() == 30);  // clamped to the window
     CHECK(window.ceiling(100).isEmpty());
-    CHECK(window.ceiling(5).get() == 20);      // clamped up
+    CHECK(window.ceiling(5).get() == 20);  // clamped up
     CHECK(rejection([&] { return window.headSet(100, true); }) == "toKey out of range");
     CHECK(rejection([&] { return window.tailSet(5, false); }) == "fromKey out of range");
 
@@ -400,8 +389,7 @@ TEST_CASE("navigableKeySet is a live NavigableSet, bounded windows included")
     CHECK_THROWS_AS(static_cast<void>(keys.add(60)), cppstream::UnsupportedOperationException);
 }
 
-TEST_CASE("descendingKeySet is a bounded navigable view of the same keys")
-{
+TEST_CASE("descendingKeySet is a bounded navigable view of the same keys") {
     IntMap prices{{10, "a"}, {20, "b"}, {30, "c"}, {40, "d"}, {50, "e"}};
     auto keys = prices.subMap(20, false, 50, true).descendingKeySet();  // (20, 50], descending
 
@@ -442,20 +430,19 @@ TEST_CASE("descendingKeySet is a bounded navigable view of the same keys")
     CHECK(prices.containsKey(30));
 }
 
-TEST_CASE("a descending map view of a const map is read-only")
-{
+TEST_CASE("a descending map view of a const map is read-only") {
     const IntMap prices{{10, "a"}, {20, "b"}};
 
     auto descending = prices.descendingMap();
     CHECK(listIs(keysOf(descending), {20, 10}));
-    CHECK_THROWS_AS(
-        static_cast<void>(descending.put(30, "c")), cppstream::UnsupportedOperationException);
+    CHECK_THROWS_AS(static_cast<void>(descending.put(30, "c")),
+                    cppstream::UnsupportedOperationException);
     CHECK_THROWS_AS(static_cast<void>(descending.pollFirstEntry()),
-        cppstream::UnsupportedOperationException);
+                    cppstream::UnsupportedOperationException);
     CHECK_THROWS_AS(static_cast<void>(prices.navigableKeySet().add(30)),
-        cppstream::UnsupportedOperationException);
+                    cppstream::UnsupportedOperationException);
     CHECK_THROWS_AS(static_cast<void>(prices.navigableKeySet().remove(10)),
-        cppstream::UnsupportedOperationException);
+                    cppstream::UnsupportedOperationException);
 
     // Reading is fine, and a window of a read-only view stays read-only rather than
     // throwing.

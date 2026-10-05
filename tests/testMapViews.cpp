@@ -9,15 +9,13 @@
 namespace {
 
 template <class T>
-std::vector<T> keysOf(const cppstream::Set<T>& view)
-{
+std::vector<T> keysOf(const cppstream::Set<T>& view) {
     return view.toArray();
 }
 
 }  // namespace
 
-TEST_CASE("map views track the map instead of copying it")
-{
+TEST_CASE("map views track the map instead of copying it") {
     cppstream::HashMap<std::string, int> ages;
     ages.put(std::string("ada"), 36);
 
@@ -40,8 +38,7 @@ TEST_CASE("map views track the map instead of copying it")
     CHECK(entries.isEmpty());
 }
 
-TEST_CASE("keySet is a Set view whose remove deletes the mapping")
-{
+TEST_CASE("keySet is a Set view whose remove deletes the mapping") {
     cppstream::HashMap<std::string, int> ages;
     ages.put(std::string("ada"), 36);
     ages.put(std::string("alan"), 41);
@@ -69,8 +66,7 @@ TEST_CASE("keySet is a Set view whose remove deletes the mapping")
     CHECK_THROWS_AS(stale->next(), cppstream::ConcurrentModificationException);
 }
 
-TEST_CASE("values is a Collection view whose remove targets the first match")
-{
+TEST_CASE("values is a Collection view whose remove targets the first match") {
     cppstream::HashMap<std::string, int> ages;
     ages.put(std::string("ada"), 36);
     ages.put(std::string("alan"), 36);
@@ -80,7 +76,7 @@ TEST_CASE("values is a Collection view whose remove targets the first match")
     CHECK(values.contains(45));
     CHECK_FALSE(values.contains(99));
     CHECK(values.stream().sorted(cppstream::Comparator<int>::naturalOrder()).toList().toArray() ==
-        std::vector<int>({36, 36, 45}));
+          std::vector<int>({36, 36, 45}));
 
     CHECK(values.remove(36));
     CHECK(ages.size() == 2);
@@ -92,8 +88,7 @@ TEST_CASE("values is a Collection view whose remove targets the first match")
     CHECK(ages.size() == 1);
 }
 
-TEST_CASE("entrySet compares, hashes and removes by mapping")
-{
+TEST_CASE("entrySet compares, hashes and removes by mapping") {
     cppstream::HashMap<std::string, int> ages;
     ages.put(std::string("ada"), 36);
     ages.put(std::string("alan"), 41);
@@ -120,8 +115,7 @@ TEST_CASE("entrySet compares, hashes and removes by mapping")
     CHECK(entries.equals(other.entrySet()));
 }
 
-TEST_CASE("map views can be read through a const map and through range-for")
-{
+TEST_CASE("map views can be read through a const map and through range-for") {
     cppstream::HashMap<std::string, int> ages;
     ages.put(std::string("ada"), 36);
     ages.put(std::string("alan"), 41);
@@ -153,7 +147,7 @@ TEST_CASE("map views can be read through a const map and through range-for")
     auto keys = readOnly.keySet();
     CHECK_THROWS_AS(static_cast<void>(keys.iterator()), cppstream::UnsupportedOperationException);
     CHECK_THROWS_AS(static_cast<void>(keys.remove(std::string("ada"))),
-        cppstream::UnsupportedOperationException);
+                    cppstream::UnsupportedOperationException);
     CHECK_THROWS_AS(static_cast<void>(keys.clear()), cppstream::UnsupportedOperationException);
 
     auto values = readOnly.values();
@@ -165,28 +159,26 @@ TEST_CASE("map views can be read through a const map and through range-for")
     CHECK(entries.size() == 2);
 }
 
-TEST_CASE("a frozen map refuses writes through its views")
-{
+TEST_CASE("a frozen map refuses writes through its views") {
     cppstream::HashMap<std::string, int> ages;
     ages.put(std::string("ada"), 36);
     ages.freeze();
 
     auto keys = ages.keySet();
     CHECK_THROWS_AS(static_cast<void>(keys.remove(std::string("ada"))),
-        cppstream::UnsupportedOperationException);
+                    cppstream::UnsupportedOperationException);
     CHECK_THROWS_AS(static_cast<void>(keys.clear()), cppstream::UnsupportedOperationException);
     auto iterator = keys.iterator();
     static_cast<void>(iterator->next());
     CHECK_THROWS_AS(static_cast<void>(iterator->remove()),
-        cppstream::UnsupportedOperationException);
+                    cppstream::UnsupportedOperationException);
 
     // Reading still works: a frozen map is only unwritable.
     CHECK(keys.size() == 1);
     CHECK(keys.contains(std::string("ada")));
 }
 
-TEST_CASE("TreeMap views come out in key order")
-{
+TEST_CASE("TreeMap views come out in key order") {
     cppstream::TreeMap<int, std::string> names;
     names.put(20, std::string("twenty"));
     names.put(10, std::string("ten"));
@@ -205,8 +197,7 @@ TEST_CASE("TreeMap views come out in key order")
     CHECK(names.values().toArray() == std::vector<std::string>({"ten", "twenty", "thirty"}));
 }
 
-TEST_CASE("map views are ordinary containers")
-{
+TEST_CASE("map views are ordinary containers") {
     cppstream::HashMap<std::string, int> ages;
     ages.put(std::string("ada"), 36);
     ages.put(std::string("alan"), 41);

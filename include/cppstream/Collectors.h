@@ -137,9 +137,9 @@ public:
 
     /// Java: Collectors.toMap(keyMapper, valueMapper, mergeFunction).
     template <class T, class KF, class VF, class MF, class K = MapKeyOf<T, KF>,
-        class U = MapValueOf<T, VF>>
-    static Collector<T, HashMap<K, U>, HashMap<K, U>> toMap(
-        KF keyMapper, VF valueMapper, MF mergeFunction) {
+              class U = MapValueOf<T, VF>>
+    static Collector<T, HashMap<K, U>, HashMap<K, U>> toMap(KF keyMapper, VF valueMapper,
+                                                            MF mergeFunction) {
         return Collector<T, HashMap<K, U>, HashMap<K, U>>(
             [] { return HashMap<K, U>(); },
             [keyMapper, valueMapper, mergeFunction](HashMap<K, U>& accumulator, T& element) {
@@ -162,7 +162,8 @@ public:
 
     /// Java: Collectors.toUnmodifiableMap(keyMapper, valueMapper).
     template <class T, class KF, class VF, class K = MapKeyOf<T, KF>, class U = MapValueOf<T, VF>>
-    static Collector<T, HashMap<K, U>, HashMap<K, U>> toUnmodifiableMap(KF keyMapper, VF valueMapper) {
+    static Collector<T, HashMap<K, U>, HashMap<K, U>> toUnmodifiableMap(KF keyMapper,
+                                                                        VF valueMapper) {
         return Collector<T, HashMap<K, U>, HashMap<K, U>>(
             [] { return HashMap<K, U>(); },
             [keyMapper, valueMapper](HashMap<K, U>& accumulator, T& element) {
@@ -213,8 +214,9 @@ public:
     /// erased at the end, which is how the "am I the first element?" test is
     /// avoided without a StringJoiner-shaped accumulator.
     template <class T>
-    static Collector<T, std::string, std::string> joining(
-        const std::string& delimiter, const std::string& prefix, const std::string& suffix) {
+    static Collector<T, std::string, std::string> joining(const std::string& delimiter,
+                                                          const std::string& prefix,
+                                                          const std::string& suffix) {
         return Collector<T, std::string, std::string>(
             [] { return std::string(); },
             [delimiter](std::string& accumulator, T& element) {
@@ -277,15 +279,22 @@ public:
     }
 
     /// Java: Collectors.summingDouble(mapper).
+    ///
+    /// The accumulator is Java's compensated one, so the result matches the JDK
+    /// rather than a naive running total; note the finisher is no longer the
+    /// identity, which is why identityFinish is absent.
     template <class T, class F>
-    static Collector<T, double, double> summingDouble(F mapper) {
-        return Collector<T, double, double>(
-            [] { return 0.0; },
-            [mapper](double& accumulator, T& element) {
-                accumulator += static_cast<double>(std::invoke(mapper, element));
+    static Collector<T, KahanSummation, double> summingDouble(F mapper) {
+        return Collector<T, KahanSummation, double>(
+            [] { return KahanSummation(); },
+            [mapper](KahanSummation& accumulator, T& element) {
+                accumulator.accept(static_cast<double>(std::invoke(mapper, element)));
             },
-            [](double&& left, double&& right) { return left + right; },
-            [](double&& accumulator) { return accumulator; }, {Characteristics::identityFinish});
+            [](KahanSummation&& left, KahanSummation&& right) {
+                left.combine(right);
+                return left;
+            },
+            [](KahanSummation&& accumulator) { return accumulator.total(); });
     }
 
     /// Java: Collectors.averagingInt(mapper). An empty stream yields 0.0, not NaN.
@@ -333,9 +342,21 @@ public:
     }
 
     /// Java: Collectors.averagingDouble(mapper).
+    ///
+    /// Uses the compensated accumulator too (Java's averagingDouble does), so it
+    /// is no longer an alias for averagingLong.
     template <class T, class F>
-    static Collector<T, AveragingState, double> averagingDouble(F mapper) {
-        return averagingLong<T>(std::move(mapper));
+    static Collector<T, DoubleSummaryStatistics, double> averagingDouble(F mapper) {
+        return Collector<T, DoubleSummaryStatistics, double>(
+            [] { return DoubleSummaryStatistics(); },
+            [mapper](DoubleSummaryStatistics& accumulator, T& element) {
+                accumulator.accept(static_cast<double>(std::invoke(mapper, element)));
+            },
+            [](DoubleSummaryStatistics&& left, DoubleSummaryStatistics&& right) {
+                left.combine(right);
+                return left;
+            },
+            [](DoubleSummaryStatistics&& accumulator) { return accumulator.getAverage(); });
     }
 
     // ---------------------------------------------------------------------
@@ -360,7 +381,8 @@ public:
                 if (right.isEmpty()) {
                     return std::move(left);
                 }
-                return comparator.compare(left.get(), right.get()) <= 0 ? std::move(left) : std::move(right);
+                return comparator.compare(left.get(), right.get()) <= 0 ? std::move(left)
+                                                                        : std::move(right);
             },
             [](Optional<T>&& accumulator) { return std::move(accumulator); },
             {Characteristics::identityFinish});
@@ -383,7 +405,8 @@ public:
                 if (right.isEmpty()) {
                     return std::move(left);
                 }
-                return comparator.compare(left.get(), right.get()) >= 0 ? std::move(left) : std::move(right);
+                return comparator.compare(left.get(), right.get()) >= 0 ? std::move(left)
+                                                                        : std::move(right);
             },
             [](Optional<T>&& accumulator) { return std::move(accumulator); },
             {Characteristics::identityFinish});
@@ -414,7 +437,8 @@ public:
                     accumulator = Optional<T>::of(element);
                     return;
                 }
-                accumulator = Optional<T>::of(std::invoke(reducer, std::move(accumulator.get()), element));
+                accumulator =
+                    Optional<T>::of(std::invoke(reducer, std::move(accumulator.get()), element));
             },
             [reducer](Optional<T>&& left, Optional<T>&& right) {
                 if (left.isEmpty()) {
@@ -436,7 +460,8 @@ public:
         return Collector<T, U, U>(
             [identity] { return identity; },
             [mapper, reducer](U& accumulator, T& element) {
-                accumulator = std::invoke(reducer, std::move(accumulator), std::invoke(mapper, element));
+                accumulator =
+                    std::invoke(reducer, std::move(accumulator), std::invoke(mapper, element));
             },
             [reducer](U&& left, U&& right) {
                 return std::invoke(reducer, std::move(left), std::move(right));
@@ -454,7 +479,8 @@ public:
     static Collector<T, typename D::accumulatorType, typename D::resultType> mapping(
         F mapper, const D& downstream) {
         using A = D::accumulatorType;
-        return Collector<T, A, typename D::resultType>(downstream.supplier(),
+        return Collector<T, A, typename D::resultType>(
+            downstream.supplier(),
             [mapper, downstream](A& accumulator, T& element) {
                 auto mapped = std::invoke(mapper, element);
                 std::invoke(downstream.accumulator(), accumulator, mapped);
@@ -467,7 +493,8 @@ public:
     static Collector<T, typename D::accumulatorType, typename D::resultType> filtering(
         P predicate, const D& downstream) {
         using A = D::accumulatorType;
-        return Collector<T, A, typename D::resultType>(downstream.supplier(),
+        return Collector<T, A, typename D::resultType>(
+            downstream.supplier(),
             [predicate, downstream](A& accumulator, T& element) {
                 if (std::invoke(predicate, element)) {
                     std::invoke(downstream.accumulator(), accumulator, element);
@@ -483,7 +510,8 @@ public:
     static Collector<T, typename D::accumulatorType, typename D::resultType> flatMapping(
         F mapper, D downstream) {
         using A = D::accumulatorType;
-        return Collector<T, A, typename D::resultType>(downstream.supplier(),
+        return Collector<T, A, typename D::resultType>(
+            downstream.supplier(),
             [mapper, downstream](A& accumulator, T& element) {
                 std::invoke(mapper, element).forEach([&accumulator, &downstream](auto& mapped) {
                     std::invoke(downstream.accumulator(), accumulator, mapped);
@@ -501,8 +529,8 @@ public:
         using A1 = D1::accumulatorType;
         using A2 = D2::accumulatorType;
         using State = std::pair<A1, A2>;
-        using R = std::remove_cvref_t<std::invoke_result_t<M&, typename D1::resultType,
-            typename D2::resultType>>;
+        using R = std::remove_cvref_t<
+            std::invoke_result_t<M&, typename D1::resultType, typename D2::resultType>>;
         return Collector<T, State, R>(
             [first, second] {
                 return State(std::invoke(first.supplier()), std::invoke(second.supplier()));
@@ -514,11 +542,12 @@ public:
             [first, second](State&& left, State&& right) {
                 return State(
                     std::invoke(first.combiner(), std::move(left.first), std::move(right.first)),
-                    std::invoke(second.combiner(), std::move(left.second), std::move(right.second)));
+                    std::invoke(second.combiner(), std::move(left.second),
+                                std::move(right.second)));
             },
             [merger, first, second](State&& state) {
                 return std::invoke(merger, std::invoke(first.finisher(), std::move(state.first)),
-                    std::invoke(second.finisher(), std::move(state.second)));
+                                   std::invoke(second.finisher(), std::move(state.second)));
             });
     }
 
@@ -562,8 +591,9 @@ public:
                     if (position == left.end()) {
                         left.emplace(std::move(entry.first), std::move(entry.second));
                     } else {
-                        position->second = std::invoke(
-                            downstream.combiner(), std::move(position->second), std::move(entry.second));
+                        position->second =
+                            std::invoke(downstream.combiner(), std::move(position->second),
+                                        std::move(entry.second));
                     }
                 }
                 return std::move(left);
@@ -572,8 +602,8 @@ public:
                 std::unordered_map<K, R> finished;
                 finished.reserve(accumulator.size());
                 for (auto& entry : accumulator) {
-                    finished.emplace(
-                        entry.first, std::invoke(downstream.finisher(), std::move(entry.second)));
+                    finished.emplace(entry.first,
+                                     std::invoke(downstream.finisher(), std::move(entry.second)));
                 }
                 return HashMap<K, R>(std::move(finished));
             });
@@ -614,8 +644,9 @@ public:
                     if (position == left.end()) {
                         left.emplace(std::move(entry.first), std::move(entry.second));
                     } else {
-                        position->second = std::invoke(
-                            downstream.combiner(), std::move(position->second), std::move(entry.second));
+                        position->second =
+                            std::invoke(downstream.combiner(), std::move(position->second),
+                                        std::move(entry.second));
                     }
                 }
                 return std::move(left);
@@ -624,9 +655,8 @@ public:
                 std::unordered_map<bool, R> finished;
                 for (const bool key : {false, true}) {
                     auto position = accumulator.find(key);
-                    A partition = position == accumulator.end()
-                                      ? std::invoke(downstream.supplier())
-                                      : std::move(position->second);
+                    A partition = position == accumulator.end() ? std::invoke(downstream.supplier())
+                                                                : std::move(position->second);
                     finished.emplace(key, std::invoke(downstream.finisher(), std::move(partition)));
                 }
                 return HashMap<bool, R>(std::move(finished));

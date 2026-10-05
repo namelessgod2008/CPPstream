@@ -8,8 +8,8 @@
 #include <string>
 
 int main() {
-    auto result = cppstream::Stream<int>::of({1, 2, 3})
-                      .collect(cppstream::Collectors::toList<std::string>());
+    auto result =
+        cppstream::Stream<int>::of({1, 2, 3}).collect(cppstream::Collectors::toList<std::string>());
     (void)result;
 }
 

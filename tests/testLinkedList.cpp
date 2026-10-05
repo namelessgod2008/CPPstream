@@ -7,8 +7,7 @@
 #include <string>
 #include <vector>
 
-TEST_CASE("LinkedList satisfies the List contract")
-{
+TEST_CASE("LinkedList satisfies the List contract") {
     cppstream::LinkedList<int> values{1, 2, 3};
 
     CHECK(values.size() == 3);
@@ -31,12 +30,11 @@ TEST_CASE("LinkedList satisfies the List contract")
     CHECK(values.subList(0, 2)->toArray() == std::vector<int>{7, 2});
 
     CHECK_THROWS_WITH_AS(values.get(9), "Index 9 out of bounds for length 3",
-        cppstream::IndexOutOfBoundsException);
+                         cppstream::IndexOutOfBoundsException);
     CHECK_THROWS_AS(values.add(9, 1), cppstream::IndexOutOfBoundsException);
 }
 
-TEST_CASE("LinkedList is a List, so the same polymorphic code drives both")
-{
+TEST_CASE("LinkedList is a List, so the same polymorphic code drives both") {
     // The interface was reused verbatim: only the storage differs. This is the
     // check that List<T> really is abstract enough.
     const cppstream::LinkedList<int> linked{1, 2, 3, 4};
@@ -51,8 +49,7 @@ TEST_CASE("LinkedList is a List, so the same polymorphic code drives both")
     CHECK(first.stream().map([](int value) { return value * 2; }).sum() == 20);
 }
 
-TEST_CASE("LinkedList addAll with an index preserves order")
-{
+TEST_CASE("LinkedList addAll with an index preserves order") {
     cppstream::LinkedList<int> values{1, 4};
     const cppstream::ArrayList<int> middle{2, 3};
 
@@ -62,8 +59,7 @@ TEST_CASE("LinkedList addAll with an index preserves order")
     CHECK_FALSE(values.addAll(4, cppstream::ArrayList<int>{}));
 }
 
-TEST_CASE("LinkedList sort is stable and honours the comparator")
-{
+TEST_CASE("LinkedList sort is stable and honours the comparator") {
     cppstream::LinkedList<int> values{3, 1, 2};
     values.sort(cppstream::Comparator<int>::naturalOrder());
     CHECK(values.toArray() == std::vector<int>{1, 2, 3});
@@ -72,8 +68,7 @@ TEST_CASE("LinkedList sort is stable and honours the comparator")
     CHECK(values.toArray() == std::vector<int>{3, 2, 1});
 }
 
-TEST_CASE("LinkedList listIterator edits through a linked cursor")
-{
+TEST_CASE("LinkedList listIterator edits through a linked cursor") {
     cppstream::LinkedList<int> values{1, 2, 3, 4};
 
     auto iterator = values.listIterator();
@@ -102,8 +97,7 @@ TEST_CASE("LinkedList listIterator edits through a linked cursor")
     CHECK_THROWS_AS(iterator->remove(), cppstream::IllegalStateException);
 }
 
-TEST_CASE("LinkedList walk backwards to the front")
-{
+TEST_CASE("LinkedList walk backwards to the front") {
     cppstream::LinkedList<int> values{1, 2, 3};
 
     auto iterator = values.listIterator(3);
@@ -114,8 +108,7 @@ TEST_CASE("LinkedList walk backwards to the front")
     CHECK_THROWS_AS(iterator->previous(), cppstream::NoSuchElementException);
 }
 
-TEST_CASE("LinkedList fails fast during iteration")
-{
+TEST_CASE("LinkedList fails fast during iteration") {
     cppstream::LinkedList<int> values{1, 2, 3};
 
     auto iterator = values.iterator();
@@ -123,8 +116,7 @@ TEST_CASE("LinkedList fails fast during iteration")
     CHECK_THROWS_AS(iterator->next(), cppstream::ConcurrentModificationException);
 }
 
-TEST_CASE("LinkedList deque-shaped helpers")
-{
+TEST_CASE("LinkedList deque-shaped helpers") {
     cppstream::LinkedList<int> values;
 
     values.addFirst(2);
@@ -147,8 +139,7 @@ TEST_CASE("LinkedList deque-shaped helpers")
     CHECK_THROWS_AS(static_cast<void>(values.getFirst()), cppstream::NoSuchElementException);
 }
 
-TEST_CASE("LinkedList supports range-for and the collector vocabulary")
-{
+TEST_CASE("LinkedList supports range-for and the collector vocabulary") {
     const cppstream::LinkedList<std::string> words{"a", "bb", "ccc"};
 
     int characters = 0;
@@ -159,7 +150,8 @@ TEST_CASE("LinkedList supports range-for and the collector vocabulary")
 
     static_assert(std::ranges::input_range<cppstream::LinkedList<std::string>>);
 
-    const std::string joined = words.stream().collect(cppstream::Collectors::joining<std::string>("+"));
+    const std::string joined =
+        words.stream().collect(cppstream::Collectors::joining<std::string>("+"));
     CHECK(joined == "a+bb+ccc");
 
     const cppstream::HashSet<std::string> unique =
@@ -167,8 +159,7 @@ TEST_CASE("LinkedList supports range-for and the collector vocabulary")
     CHECK(unique.size() == 3);
 }
 
-TEST_CASE("frozen LinkedList refuses mutation")
-{
+TEST_CASE("frozen LinkedList refuses mutation") {
     cppstream::LinkedList<int> values{1, 2, 3};
     values.freeze();
 
@@ -177,6 +168,6 @@ TEST_CASE("frozen LinkedList refuses mutation")
     CHECK_THROWS_AS(values.addFirst(0), cppstream::UnsupportedOperationException);
     CHECK_THROWS_AS(values.clear(), cppstream::UnsupportedOperationException);
     CHECK_THROWS_AS(values.sort(cppstream::Comparator<int>::naturalOrder()),
-        cppstream::UnsupportedOperationException);
+                    cppstream::UnsupportedOperationException);
     CHECK(values.size() == 3);
 }

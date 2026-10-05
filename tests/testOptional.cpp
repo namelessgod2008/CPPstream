@@ -1,14 +1,13 @@
-#include <doctest/doctest.h>
-
 #include <cppstream/cppstream.h>
+
+#include <doctest/doctest.h>
 
 #include <cstddef>
 #include <functional>
 #include <optional>
 #include <string>
 
-TEST_CASE("an empty Optional reports itself as empty")
-{
+TEST_CASE("an empty Optional reports itself as empty") {
     const cppstream::Optional<int> absent;
 
     CHECK(absent.isEmpty());
@@ -17,8 +16,7 @@ TEST_CASE("an empty Optional reports itself as empty")
     CHECK(absent.hashCode() == std::size_t{0});
 }
 
-TEST_CASE("a value Optional can be built by every Java factory")
-{
+TEST_CASE("a value Optional can be built by every Java factory") {
     const auto byConstructor = cppstream::Optional<int>{42};
     CHECK(byConstructor.isPresent());
     CHECK(byConstructor.get() == 42);
@@ -40,8 +38,7 @@ TEST_CASE("a value Optional can be built by every Java factory")
     CHECK(fromNullopt.isEmpty());
 }
 
-TEST_CASE("ofNullable collapses a null pointer, and only a pointer")
-{
+TEST_CASE("ofNullable collapses a null pointer, and only a pointer") {
     int value = 7;
     int* const present = &value;
     int* const absent = nullptr;
@@ -54,27 +51,24 @@ TEST_CASE("ofNullable collapses a null pointer, and only a pointer")
     CHECK(cppstream::Optional<int>::ofNullable(7).isPresent());
 }
 
-TEST_CASE("get() throws NoSuchElementException with Java's message")
-{
+TEST_CASE("get() throws NoSuchElementException with Java's message") {
     const cppstream::Optional<int> absent;
 
     // The static_cast<void> is required because get() is [[nodiscard]] and the
     // CHECK_THROWS_* macros discard the value by design.
     CHECK_THROWS_WITH_AS(static_cast<void>(absent.get()), "No value present",
-        cppstream::NoSuchElementException);
+                         cppstream::NoSuchElementException);
     CHECK_THROWS_AS(static_cast<void>(absent.get()), cppstream::RuntimeException);
 }
 
-TEST_CASE("get() on a non-const lvalue yields a mutable reference")
-{
+TEST_CASE("get() on a non-const lvalue yields a mutable reference") {
     cppstream::Optional<std::string> greeting = std::string("hello");
     greeting.get() += " world";
 
     CHECK(greeting.get() == "hello world");
 }
 
-TEST_CASE("orElse and orElseGet supply a fallback only when needed")
-{
+TEST_CASE("orElse and orElseGet supply a fallback only when needed") {
     const cppstream::Optional<int> present = cppstream::Optional<int>::of(1);
     const cppstream::Optional<int> absent;
 
@@ -93,25 +87,20 @@ TEST_CASE("orElse and orElseGet supply a fallback only when needed")
     CHECK(supplierCalls == 1);
 }
 
-TEST_CASE("orElseThrow supports both the Java 10 no-arg form and a custom supplier")
-{
+TEST_CASE("orElseThrow supports both the Java 10 no-arg form and a custom supplier") {
     const cppstream::Optional<int> present = cppstream::Optional<int>::of(1);
     const cppstream::Optional<int> absent;
 
     CHECK(present.orElseThrow() == 1);
     CHECK_THROWS_AS(static_cast<void>(absent.orElseThrow()), cppstream::NoSuchElementException);
 
-    CHECK(present.orElseThrow([] {
-        return cppstream::IllegalStateException("unreachable");
-    }) == 1);
-    CHECK_THROWS_WITH_AS(static_cast<void>(absent.orElseThrow([] {
-                             return cppstream::NoSuchElementException("nothing here");
-                         })),
-        "nothing here", cppstream::NoSuchElementException);
+    CHECK(present.orElseThrow([] { return cppstream::IllegalStateException("unreachable"); }) == 1);
+    CHECK_THROWS_WITH_AS(static_cast<void>(absent.orElseThrow(
+                             [] { return cppstream::NoSuchElementException("nothing here"); })),
+                         "nothing here", cppstream::NoSuchElementException);
 }
 
-TEST_CASE("ifPresent and ifPresentOrElse run exactly one branch")
-{
+TEST_CASE("ifPresent and ifPresentOrElse run exactly one branch") {
     const cppstream::Optional<int> present = cppstream::Optional<int>::of(5);
     const cppstream::Optional<int> absent;
 
@@ -125,27 +114,27 @@ TEST_CASE("ifPresent and ifPresentOrElse run exactly one branch")
 
     int presentBranch = 0;
     int emptyBranch = 0;
-    present.ifPresentOrElse([&presentBranch](int) { ++presentBranch; }, [&emptyBranch] { ++emptyBranch; });
+    present.ifPresentOrElse([&presentBranch](int) { ++presentBranch; },
+                            [&emptyBranch] { ++emptyBranch; });
     CHECK(presentBranch == 1);
     CHECK(emptyBranch == 0);
 
-    absent.ifPresentOrElse([&presentBranch](int) { ++presentBranch; }, [&emptyBranch] { ++emptyBranch; });
+    absent.ifPresentOrElse([&presentBranch](int) { ++presentBranch; },
+                           [&emptyBranch] { ++emptyBranch; });
     CHECK(presentBranch == 1);
     CHECK(emptyBranch == 1);
 }
 
-TEST_CASE("map transforms a present value and short-circuits on an empty one")
-{
+TEST_CASE("map transforms a present value and short-circuits on an empty one") {
     const auto greeting = cppstream::Optional<std::string>::of(std::string("hello"));
 
-    const auto length = greeting.map([](const std::string& value) {
-        return static_cast<int>(value.size());
-    });
+    const auto length =
+        greeting.map([](const std::string& value) { return static_cast<int>(value.size()); });
     CHECK(length.get() == 5);
 
     int mapperCalls = 0;
-    const auto mappedNothing = cppstream::Optional<std::string>::empty().map(
-        [&mapperCalls](const std::string& value) {
+    const auto mappedNothing =
+        cppstream::Optional<std::string>::empty().map([&mapperCalls](const std::string& value) {
             ++mapperCalls;
             return static_cast<int>(value.size());
         });
@@ -153,16 +142,14 @@ TEST_CASE("map transforms a present value and short-circuits on an empty one")
     CHECK(mapperCalls == 0);
 }
 
-TEST_CASE("map also collapses a mapper that returns a null pointer")
-{
+TEST_CASE("map also collapses a mapper that returns a null pointer") {
     const auto wrapper = cppstream::Optional<int>::of(1);
     const auto neverPresent = wrapper.map([](int) -> int* { return nullptr; });
 
     CHECK(neverPresent.isEmpty());
 }
 
-TEST_CASE("flatMap takes a mapper that already returns an Optional")
-{
+TEST_CASE("flatMap takes a mapper that already returns an Optional") {
     const auto lengthOf = [](const std::string& value) {
         if (value.empty()) {
             return cppstream::Optional<int>::empty();
@@ -176,8 +163,7 @@ TEST_CASE("flatMap takes a mapper that already returns an Optional")
     CHECK(cppstream::Optional<std::string>::empty().flatMap(lengthOf).isEmpty());
 }
 
-TEST_CASE("filter keeps a value only when the predicate accepts it")
-{
+TEST_CASE("filter keeps a value only when the predicate accepts it") {
     const auto even = cppstream::Optional<int>::of(4);
     const auto odd = cppstream::Optional<int>::of(5);
     const cppstream::Optional<int> absent;
@@ -186,12 +172,16 @@ TEST_CASE("filter keeps a value only when the predicate accepts it")
     CHECK(odd.filter([](int value) { return value % 2 == 0; }).isEmpty());
 
     int predicateCalls = 0;
-    CHECK(absent.filter([&predicateCalls](int) { ++predicateCalls; return true; }).isEmpty());
+    CHECK(absent
+              .filter([&predicateCalls](int) {
+                  ++predicateCalls;
+                  return true;
+              })
+              .isEmpty());
     CHECK(predicateCalls == 0);
 }
 
-TEST_CASE("equals and hashCode follow Java's Optional contract")
-{
+TEST_CASE("equals and hashCode follow Java's Optional contract") {
     const cppstream::Optional<int> five = cppstream::Optional<int>::of(5);
     const cppstream::Optional<int> alsoFive = cppstream::Optional<int>::of(5);
     const cppstream::Optional<int> six = cppstream::Optional<int>::of(6);
@@ -206,8 +196,7 @@ TEST_CASE("equals and hashCode follow Java's Optional contract")
     CHECK(absent.hashCode() == std::size_t{0});
 }
 
-TEST_CASE("Optional and std::optional convert in both directions")
-{
+TEST_CASE("Optional and std::optional convert in both directions") {
     const std::optional<int> stdValue{5};
 
     const cppstream::Optional<int> wrapped = stdValue;
@@ -228,8 +217,7 @@ TEST_CASE("Optional and std::optional convert in both directions")
     CHECK(cppstream::Optional<int>(stdEmpty).isEmpty());
 }
 
-TEST_CASE("the Optional trait recognises instantiations")
-{
+TEST_CASE("the Optional trait recognises instantiations") {
     static_assert(cppstream::isOptional<cppstream::Optional<int>>);
     static_assert(cppstream::isOptional<cppstream::Optional<std::string>&>);
     static_assert(cppstream::isOptional<const cppstream::Optional<int>>);

@@ -4,8 +4,7 @@
 
 #include <string>
 
-TEST_CASE("Lists factories return frozen lists")
-{
+TEST_CASE("Lists factories return frozen lists") {
     const cppstream::ArrayList<int> empty = cppstream::Lists::empty<int>();
     CHECK(empty.isEmpty());
     CHECK(empty.isFrozen());
@@ -40,11 +39,9 @@ TEST_CASE("Lists factories return frozen lists")
     CHECK_FALSE(thawed.isFrozen());
 }
 
-TEST_CASE("Lists::unmodifiableList and reversed")
-{
+TEST_CASE("Lists::unmodifiableList and reversed") {
     cppstream::ArrayList<int> values{1, 2, 3};
-    const cppstream::ArrayList<int> frozen =
-        cppstream::Lists::unmodifiableList(std::move(values));
+    const cppstream::ArrayList<int> frozen = cppstream::Lists::unmodifiableList(std::move(values));
     CHECK(frozen.isFrozen());
     CHECK(frozen.size() == 3);
 
@@ -54,8 +51,7 @@ TEST_CASE("Lists::unmodifiableList and reversed")
     CHECK_FALSE(backwards.isFrozen());
 }
 
-TEST_CASE("Sets factories return frozen sets")
-{
+TEST_CASE("Sets factories return frozen sets") {
     CHECK(cppstream::Sets::empty<int>().isEmpty());
 
     cppstream::HashSet<std::string> letters =
@@ -73,8 +69,7 @@ TEST_CASE("Sets factories return frozen sets")
     CHECK(cppstream::Sets::unmodifiableSet(std::move(thawed)).isFrozen());
 }
 
-TEST_CASE("Maps factories return frozen maps")
-{
+TEST_CASE("Maps factories return frozen maps") {
     CHECK(cppstream::Maps::empty<std::string, int>().isEmpty());
 
     const cppstream::HashMap<std::string, int> ages =
@@ -83,18 +78,37 @@ TEST_CASE("Maps factories return frozen maps")
     CHECK(*ages.get(std::string("ada")) == 36);
     CHECK(ages.isFrozen());
 
-    const cppstream::HashMap<std::string, int> entries = cppstream::Maps::ofEntries<std::string, int>(
-        cppstream::Maps::entry(std::string("a"), 1), cppstream::Maps::entry(std::string("b"), 2));
+    const cppstream::HashMap<std::string, int> entries =
+        cppstream::Maps::ofEntries<std::string, int>(cppstream::Maps::entry(std::string("a"), 1),
+                                                     cppstream::Maps::entry(std::string("b"), 2));
     CHECK(entries.size() == 2);
     CHECK(entries.isFrozen());
 
-    const cppstream::HashMap<std::string, int> copy = cppstream::Maps::copyOf<std::string, int>(entries);
+    const cppstream::HashMap<std::string, int> copy =
+        cppstream::Maps::copyOf<std::string, int>(entries);
     CHECK(copy.equals(entries));
     CHECK(copy.isFrozen());
 }
 
-TEST_CASE("Maps::entry is an immutable-ish pair with Java's equals and hashCode")
-{
+TEST_CASE("Maps::unmodifiableMap freezes the map it returns") {
+    cppstream::HashMap<std::string, int> source;
+    source.put(std::string("ada"), 36);
+
+    // Not const: the mutators that must throw are non-const members (frozen() is
+    // checked at run time, exactly as the frozen-list/set tests do it).
+    cppstream::HashMap<std::string, int> frozen = cppstream::Maps::unmodifiableMap(source);
+    CHECK(frozen.isFrozen());
+    CHECK(*frozen.get(std::string("ada")) == 36);
+    CHECK_THROWS_AS(frozen.put(std::string("alan"), 41), cppstream::UnsupportedOperationException);
+    CHECK_THROWS_AS(frozen.remove(std::string("ada")), cppstream::UnsupportedOperationException);
+
+    // Java's wrapper leaves the backing map writable, and so does this copy-and-
+    // freeze version: only the returned map is frozen.
+    source.put(std::string("alan"), 41);
+    CHECK(source.size() == 2);
+}
+
+TEST_CASE("Maps::entry is an immutable-ish pair with Java's equals and hashCode") {
     const auto left = cppstream::Maps::entry(std::string("a"), 1);
     const auto right = cppstream::Maps::entry(std::string("a"), 1);
 

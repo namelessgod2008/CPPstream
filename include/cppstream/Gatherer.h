@@ -86,7 +86,7 @@ public:
     /// Java: Gatherer.ofSequential(initializer, integrator).
     template <class InitializerFn, class IntegratorFn>
         requires std::is_invocable_r_v<A, InitializerFn&> &&
-                 std::is_invocable_r_v<bool, IntegratorFn&, A&, const T&, Downstream<R>&>
+                     std::is_invocable_r_v<bool, IntegratorFn&, A&, const T&, Downstream<R>&>
     Gatherer(InitializerFn initializer, IntegratorFn integrator)
         : initializer_(std::move(initializer)), integrator_(std::move(integrator)) {}
 
@@ -95,10 +95,11 @@ public:
     /// nothing at the end can simply omit it.
     template <class InitializerFn, class IntegratorFn, class FinisherFn>
         requires std::is_invocable_r_v<A, InitializerFn&> &&
-                 std::is_invocable_r_v<bool, IntegratorFn&, A&, const T&, Downstream<R>&> &&
-                 std::is_invocable_r_v<void, FinisherFn&, A&, Downstream<R>&>
+                     std::is_invocable_r_v<bool, IntegratorFn&, A&, const T&, Downstream<R>&> &&
+                     std::is_invocable_r_v<void, FinisherFn&, A&, Downstream<R>&>
     Gatherer(InitializerFn initializer, IntegratorFn integrator, FinisherFn finisher)
-        : initializer_(std::move(initializer)), integrator_(std::move(integrator)),
+        : initializer_(std::move(initializer)),
+          integrator_(std::move(integrator)),
           finisher_(std::move(finisher)) {}
 
     /// The state a fresh traversal starts from. Java's initializer() is never null

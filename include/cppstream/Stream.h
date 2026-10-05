@@ -6,6 +6,7 @@
 #include <cppstream/Optional.h>
 #include <cppstream/Parallel.h>
 #include <cppstream/RuntimeException.h>
+#include <cppstream/SummaryStatistics.h>
 #include <cppstream/cppstream_fwd.h>
 
 #include <algorithm>
@@ -216,8 +217,9 @@ public:
     template <class R, class F>
         requires std::is_invocable_v<F&, const T&, Downstream<R>&>
     Stream<R> mapMulti(F mapper) && {
-        return std::move(*this).gather(Gatherer<T, Void, R>(
-            [mapper = std::move(mapper)](Void&, const T& element, Downstream<R>& downstream) -> bool {
+        return std::move(*this).gather(
+            Gatherer<T, Void, R>([mapper = std::move(mapper)](Void&, const T& element,
+                                                              Downstream<R>& downstream) -> bool {
                 std::invoke(mapper, element, downstream);
                 return true;
             }));
@@ -255,29 +257,29 @@ public:
         A accumulated = gatherer.initialState();
 
         return Stream<R>(
-            typename Stream<R>::NextFn([previous = std::move(previous),
-                                        gatherer = std::move(gatherer),
-                                        accumulated = std::move(accumulated),
-                                        downstream = std::move(downstream), pending,
-                                        done = false] mutable -> std::optional<R> {
-                for (;;) {
-                    if (!pending->empty()) {
-                        R front = std::move(pending->front());
-                        pending->pop_front();
-                        return std::optional<R>(std::in_place, std::move(front));
+            typename Stream<R>::NextFn(
+                [previous = std::move(previous), gatherer = std::move(gatherer),
+                 accumulated = std::move(accumulated), downstream = std::move(downstream), pending,
+                 done = false] mutable -> std::optional<R> {
+                    for (;;) {
+                        if (!pending->empty()) {
+                            R front = std::move(pending->front());
+                            pending->pop_front();
+                            return std::optional<R>(std::in_place, std::move(front));
+                        }
+                        if (done) {
+                            return std::nullopt;
+                        }
+                        std::optional<T> element = previous();
+                        const bool keepGoing =
+                            element.has_value() &&
+                            gatherer.integrate(accumulated, *element, downstream);
+                        if (!element.has_value() || !keepGoing) {
+                            done = true;
+                            gatherer.finish(accumulated, downstream);
+                        }
                     }
-                    if (done) {
-                        return std::nullopt;
-                    }
-                    std::optional<T> element = previous();
-                    const bool keepGoing =
-                        element.has_value() && gatherer.integrate(accumulated, *element, downstream);
-                    if (!element.has_value() || !keepGoing) {
-                        done = true;
-                        gatherer.finish(accumulated, downstream);
-                    }
-                }
-            }),
+                }),
             std::nullopt, std::nullopt, parallel_);
     }
 
@@ -333,31 +335,30 @@ public:
         // Reordering preserves the element count, and the hint is what makes the
         // one buffer this stage needs a single allocation.
         const SizeHint promised = sizeHint_;
-        return Stream<T>(
-            NextFn([previous = std::move(previous), comparator, promised,
-                    buffer = std::optional<std::vector<T>>{},
-                    index = std::size_t{0}] mutable -> std::optional<T> {
-                if (!buffer) {
-                    std::vector<T> collected;
-                    collected.reserve(promised.value_or(0));
-                    while (std::optional<T> value = previous()) {
-                        collected.push_back(std::move(*value));
-                    }
-                    std::sort(collected.begin(), collected.end(),
-                        [&comparator](const T& left, const T& right) {
-                            return comparator.compare(left, right) < 0;
-                        });
-                    buffer = std::move(collected);
-                }
-                if (index >= buffer->size()) {
-                    return std::nullopt;
-                }
-                // Removing the parentheses would re-parse this as
-                // *(buffer[index++]), which is a different expression.
-                // NOLINTNEXTLINE(readability-redundant-parentheses)
-                return std::optional<T>(std::in_place, std::move((*buffer)[index++]));
-            }),
-            promised, budget_, parallel_);
+        return Stream<T>(NextFn([previous = std::move(previous), comparator, promised,
+                                 buffer = std::optional<std::vector<T>>{},
+                                 index = std::size_t{0}] mutable -> std::optional<T> {
+                             if (!buffer) {
+                                 std::vector<T> collected;
+                                 collected.reserve(promised.value_or(0));
+                                 while (std::optional<T> value = previous()) {
+                                     collected.push_back(std::move(*value));
+                                 }
+                                 std::sort(collected.begin(), collected.end(),
+                                           [&comparator](const T& left, const T& right) {
+                                               return comparator.compare(left, right) < 0;
+                                           });
+                                 buffer = std::move(collected);
+                             }
+                             if (index >= buffer->size()) {
+                                 return std::nullopt;
+                             }
+                             // Removing the parentheses would re-parse this as
+                             // *(buffer[index++]), which is a different expression.
+                             // NOLINTNEXTLINE(readability-redundant-parentheses)
+                             return std::optional<T>(std::in_place, std::move((*buffer)[index++]));
+                         }),
+                         promised, budget_, parallel_);
     }
 
     /// Not a Java Stream method: mirrors SequencedCollection.reversed()
@@ -609,12 +610,29 @@ public:
     /// no reason to exist; the numeric operations become concept-constrained
     /// members. This is the one place the port is *smaller* than Java.
     ///
-    /// Expressed as reduce(0, +), which is what makes it batched in a parallel
-    /// pipeline. Addition is associative for integers and not for floating point, so
-    /// a parallel sum of doubles may differ in the last bit from the sequential one
-    /// -- Java's DoubleStream.sum() has the same property.
-    [[nodiscard]] T sum() && requires(std::integral<T> || std::floating_point<T>) {
-        return std::move(*this).reduce(T{}, [](T left, T right) { return left + right; });
+    /// Integer sums are a reduce(0, +), which is what makes them batched in a
+    /// parallel pipeline. Double sums instead use Java's compensated accumulator,
+    /// so the last bit matches the JDK rather than a naive running total.
+    [[nodiscard]] T sum() &&
+        requires(std::integral<T> || std::floating_point<T>)
+    {
+        if constexpr (std::same_as<T, double>) {
+            // Accumulated in encounter order rather than per slice: compensated
+            // addition is not associative, so per-slice merging could differ from
+            // the sequential answer (measured: ten thousand 0.1s gave 1000.0
+            // sequentially and 1000.0000000000001 sliced). Pulling in order keeps
+            // a parallel run byte-for-byte equal to the sequential one while
+            // batched stages upstream still run on the pool -- the same trade
+            // average() documents below.
+            NextFn next = takeNext();
+            KahanSummation total;
+            while (std::optional<T> value = next()) {
+                total.accept(*value);
+            }
+            return total.total();
+        } else {
+            return std::move(*this).reduce(T{}, [](T left, T right) { return left + right; });
+        }
     }
 
     /// Java: IntStream/LongStream/DoubleStream.average(). Always returns double,
@@ -623,19 +641,21 @@ public:
     /// Left sequential: a parallel average has to merge (sum, count) pairs, and the
     /// double rounding that would introduce is not worth it for an operation whose
     /// per-element cost is one addition. Batched stages upstream are unaffected.
+    /// The running sum is Java's compensated one, so the last bit matches the JDK.
     [[nodiscard]] Optional<double> average() &&
-        requires(std::integral<T> || std::floating_point<T>) {
+        requires(std::integral<T> || std::floating_point<T>)
+    {
         NextFn next = takeNext();
-        double total = 0.0;
+        KahanSummation total;
         std::int64_t seen = 0;
         while (std::optional<T> value = next()) {
-            total += static_cast<double>(*value);
+            total.accept(static_cast<double>(*value));
             ++seen;
         }
         if (seen == 0) {
             return Optional<double>::empty();
         }
-        return Optional<double>::of(total / static_cast<double>(seen));
+        return Optional<double>::of(total.total() / static_cast<double>(seen));
     }
 
     /// Java: Stream.findFirst(). Short-circuits: exactly one element is pulled.
@@ -900,9 +920,7 @@ public:
                          promised, promised);
     }
 
-    static Stream<T> of(std::initializer_list<T> values) {
-        return of(std::vector<T>(values));
-    }
+    static Stream<T> of(std::initializer_list<T> values) { return of(std::vector<T>(values)); }
 
     /// C++-only: builds a stream from any std::ranges range, without wrapping it
     /// in an Iterable first. This is the interop half of the ranges work; the
@@ -1088,8 +1106,7 @@ private:
         if (!hint) {
             return std::nullopt;
         }
-        const std::size_t ceiling =
-            cap < 0 ? 0 : static_cast<std::size_t>(cap);
+        const std::size_t ceiling = cap < 0 ? 0 : static_cast<std::size_t>(cap);
         return std::min(*hint, ceiling);
     }
 
@@ -1119,8 +1136,8 @@ private:
         if (end < start) {
             return std::size_t{0};
         }
-        const auto length = static_cast<std::size_t>(end - start) +
-                            static_cast<std::size_t>(inclusiveOffset);
+        const auto length =
+            static_cast<std::size_t>(end - start) + static_cast<std::size_t>(inclusiveOffset);
         return length;
     }
 

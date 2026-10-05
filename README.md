@@ -16,7 +16,7 @@
 
 ## 状态
 
-已经全部做完，也全都测过了：**242 个测试用例、1490 条断言**，在最严格的三种检查方式下都
+已经全部做完，也全都测过了：**245 个测试用例、1508 条断言**，在最严格的一整套检查下都
 通过；另外还有 5 个"故意写错、看它拦不拦得住"的用例。整套东西由 34 个文件组成，配上 25 个
 测试和示例文件，用检查工具扫过一遍，一处警告都没有。
 
@@ -179,7 +179,7 @@ target_link_libraries(your_target PRIVATE cppstream::cppstream)
 名字一律是"驼峰"式：由几个单词拼起来，每个单词首字母大写，其余小写。具体来说，类型和概念
 首字母大写（`CamelCase`），函数、变量和枚举值首字母小写（`camelBack`），私有的成员名字末尾
 加一个下划线。规则写在 `.clang-format` 和 `.clang-tidy` 两个配置里，CLion 自带的工具就能按它
-检查。顺带一句：还有几十个文件的排版没统一整理，我们打算留到单独一次改动里专门处理。
+检查；全库的排版已经统一整理过一遍，而且每次提交都会自动核对，不会再走样。
 
 ---
 
@@ -205,8 +205,8 @@ original wording.
 
 ## Status
 
-All done and well tested: **242 test cases, 1490 checks**, passing under three of
-the strictest checking modes, plus 5 cases that are deliberately written wrong to
+All done and well tested: **245 test cases, 1508 checks**, passing under the
+strictest checking modes, plus 5 cases that are deliberately written wrong to
 prove the tool catches them. It is 34 files, with 25 test and example files, and a
 sweep with the checking tools found not one warning.
 
@@ -385,5 +385,5 @@ capital and the rest lower case. Concretely, types and concepts start with a
 capital (`CamelCase`); functions, variables and enum values start lower
 (`camelBack`); private members end with an underscore. The rules live in two
 config files, `.clang-format` and `.clang-tidy`, and the tools bundled with CLion
-can check them for you. One aside: a few dozen files have not been tidied into
-that shape yet, and we intend to do that in a separate change of their own.
+can check them for you. The whole tree has now been tidied into that shape, and
+every push is checked automatically, so it cannot drift back.

@@ -46,8 +46,7 @@ public:
     /// The past-the-end value. All exhausted iterators compare equal to it.
     ReadOnlyIterator() noexcept = default;
 
-    explicit ReadOnlyIterator(std::unique_ptr<Iterator<const T>> inner)
-        : inner_(std::move(inner)) {
+    explicit ReadOnlyIterator(std::unique_ptr<Iterator<const T>> inner) : inner_(std::move(inner)) {
         advance();
     }
 
@@ -67,8 +66,8 @@ public:
 
     void operator++(int) { advance(); }
 
-    [[nodiscard]] friend bool operator==(
-        const ReadOnlyIterator& left, const ReadOnlyIterator& right) noexcept {
+    [[nodiscard]] friend bool operator==(const ReadOnlyIterator& left,
+                                         const ReadOnlyIterator& right) noexcept {
         return left.inner_.get() == right.inner_.get();
     }
 
@@ -133,9 +132,7 @@ public:
     }
 
     /// Range-for and std::ranges support. Read-only and single-pass.
-    [[nodiscard]] ReadOnlyIterator<T> begin() const {
-        return ReadOnlyIterator<T>(constIterator());
-    }
+    [[nodiscard]] ReadOnlyIterator<T> begin() const { return ReadOnlyIterator<T>(constIterator()); }
 
     /// The sentinel half of the range. A distinct type, see ReadOnlySentinel.
     [[nodiscard]] ReadOnlySentinel end() const noexcept { return {}; }

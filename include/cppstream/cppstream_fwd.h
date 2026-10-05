@@ -133,6 +133,7 @@ class Maps;
 
 class IntSummaryStatistics;
 class LongSummaryStatistics;
+class KahanSummation;
 class DoubleSummaryStatistics;
 
 template <class V>

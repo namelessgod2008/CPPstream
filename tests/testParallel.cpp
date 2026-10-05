@@ -117,6 +117,18 @@ TEST_CASE("parallel additivity: sum, count and toArray agree with the sequential
     CHECK(parallelArray.back() == 3999);
 }
 
+TEST_CASE("parallel double sums agree with the compensated sequential run") {
+    using cppstream::Stream;
+
+    // Ten thousand 0.1s: a naive total is visibly wrong, and the compensated
+    // sequential and parallel answers must both be exactly 1000.0.
+    const std::vector<double> tenths(10000, 0.1);
+    const double sequential = Stream<double>::of(tenths).sum();
+    const double parallel = Stream<double>::of(tenths).parallel().sum();
+    CHECK(sequential == 1000.0);
+    CHECK(parallel == sequential);
+}
+
 TEST_CASE("parallel map really runs on more than one thread") {
     using cppstream::Stream;
 

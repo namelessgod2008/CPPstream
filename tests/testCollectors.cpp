@@ -10,12 +10,13 @@
 
 namespace {
 
-std::vector<std::string> words() { return {"alpha", "bb", "ccc", "dd", "e"}; }
+std::vector<std::string> words() {
+    return {"alpha", "bb", "ccc", "dd", "e"};
+}
 
 }  // namespace
 
-TEST_CASE("toList, toSet and their unmodifiable variants")
-{
+TEST_CASE("toList, toSet and their unmodifiable variants") {
     const cppstream::ArrayList<int> list =
         cppstream::Stream<int>::of({1, 2, 2, 3}).collect(cppstream::Collectors::toList<int>());
     CHECK(list.size() == 4);
@@ -25,8 +26,8 @@ TEST_CASE("toList, toSet and their unmodifiable variants")
         cppstream::Stream<int>::of({1, 2, 2, 3}).collect(cppstream::Collectors::toSet<int>());
     CHECK(set.size() == 3);
 
-    cppstream::ArrayList<int> frozen =
-        cppstream::Stream<int>::of({1, 2}).collect(cppstream::Collectors::toUnmodifiableList<int>());
+    cppstream::ArrayList<int> frozen = cppstream::Stream<int>::of({1, 2}).collect(
+        cppstream::Collectors::toUnmodifiableList<int>());
     CHECK(frozen.isFrozen());
     CHECK_THROWS_AS(frozen.add(3), cppstream::UnsupportedOperationException);
 
@@ -36,12 +37,12 @@ TEST_CASE("toList, toSet and their unmodifiable variants")
     CHECK_THROWS_AS(frozenSet.add(3), cppstream::UnsupportedOperationException);
 }
 
-TEST_CASE("toMap rejects duplicates, and the merging overload does not")
-{
-    const cppstream::HashMap<std::string, int> lengths = cppstream::Stream<std::string>::of(words())
-        .collect(cppstream::Collectors::toMap<std::string>(
-            [](const std::string& word) { return word; },
-            [](const std::string& word) { return static_cast<int>(word.size()); }));
+TEST_CASE("toMap rejects duplicates, and the merging overload does not") {
+    const cppstream::HashMap<std::string, int> lengths =
+        cppstream::Stream<std::string>::of(words()).collect(
+            cppstream::Collectors::toMap<std::string>(
+                [](const std::string& word) { return word; },
+                [](const std::string& word) { return static_cast<int>(word.size()); }));
     CHECK(lengths.size() == 5);
 
     // Java throws IllegalStateException on a duplicate key.
@@ -49,37 +50,40 @@ TEST_CASE("toMap rejects duplicates, and the merging overload does not")
                         cppstream::Collectors::toMap<std::string>(
                             [](const std::string& word) { return static_cast<int>(word.size()); },
                             [](const std::string& word) { return word; }))),
-        cppstream::IllegalStateException);
+                    cppstream::IllegalStateException);
 
     // With a merge function the same stream succeeds.
-    const cppstream::HashMap<int, std::string> merged = cppstream::Stream<std::string>::of(words())
-        .collect(cppstream::Collectors::toMap<std::string>(
-            [](const std::string& word) { return static_cast<int>(word.size()); },
-            [](const std::string& word) { return word; },
-            [](const std::string& left, const std::string& right) { return left + "|" + right; }));
+    const cppstream::HashMap<int, std::string> merged =
+        cppstream::Stream<std::string>::of(words()).collect(
+            cppstream::Collectors::toMap<std::string>(
+                [](const std::string& word) { return static_cast<int>(word.size()); },
+                [](const std::string& word) { return word; },
+                [](const std::string& left, const std::string& right) {
+                    return left + "|" + right;
+                }));
     CHECK(merged.size() == 4);
     CHECK(merged.get(2)->find('|') != std::string::npos);
 
-    cppstream::HashMap<std::string, int> frozen = cppstream::Stream<std::string>::of(words())
-        .collect(cppstream::Collectors::toUnmodifiableMap<std::string>(
-            [](const std::string& word) { return word; },
-            [](const std::string& word) { return static_cast<int>(word.size()); }));
+    cppstream::HashMap<std::string, int> frozen =
+        cppstream::Stream<std::string>::of(words()).collect(
+            cppstream::Collectors::toUnmodifiableMap<std::string>(
+                [](const std::string& word) { return word; },
+                [](const std::string& word) { return static_cast<int>(word.size()); }));
     CHECK(frozen.isFrozen());
     CHECK_THROWS_AS(frozen.put(std::string("x"), 1), cppstream::UnsupportedOperationException);
 }
 
-TEST_CASE("joining covers all three overloads")
-{
-    const std::string plain =
-        cppstream::Stream<std::string>::of(words()).collect(cppstream::Collectors::joining<std::string>());
+TEST_CASE("joining covers all three overloads") {
+    const std::string plain = cppstream::Stream<std::string>::of(words()).collect(
+        cppstream::Collectors::joining<std::string>());
     CHECK(plain == "alphabbcccdde");
 
-    const std::string delimited = cppstream::Stream<std::string>::of(words())
-                                      .collect(cppstream::Collectors::joining<std::string>(", "));
+    const std::string delimited = cppstream::Stream<std::string>::of(words()).collect(
+        cppstream::Collectors::joining<std::string>(", "));
     CHECK(delimited == "alpha, bb, ccc, dd, e");
 
-    const std::string wrapped = cppstream::Stream<std::string>::of(words())
-                                    .collect(cppstream::Collectors::joining<std::string>("-", "[", "]"));
+    const std::string wrapped = cppstream::Stream<std::string>::of(words()).collect(
+        cppstream::Collectors::joining<std::string>("-", "[", "]"));
     CHECK(wrapped == "[alpha-bb-ccc-dd-e]");
 
     // Java's joining on an empty stream yields just prefix + suffix.
@@ -91,33 +95,46 @@ TEST_CASE("joining covers all three overloads")
               .collect(cppstream::Collectors::joining<std::string>(",", "<", ">")) == "<solo>");
 }
 
-TEST_CASE("counting, summing and averaging")
-{
-    CHECK(cppstream::Stream<int>::of({1, 2, 3, 4})
-              .collect(cppstream::Collectors::counting<int>()) == 4);
+TEST_CASE("counting, summing and averaging") {
+    CHECK(
+        cppstream::Stream<int>::of({1, 2, 3, 4}).collect(cppstream::Collectors::counting<int>()) ==
+        4);
 
-    CHECK(cppstream::Stream<std::string>::of(words())
-              .collect(cppstream::Collectors::summingInt<std::string>(
+    CHECK(cppstream::Stream<std::string>::of(words()).collect(
+              cppstream::Collectors::summingInt<std::string>(
                   [](const std::string& word) { return static_cast<int>(word.size()); })) == 13);
 
     CHECK(cppstream::Stream<int>::of({1, 2, 3, 4})
-              .collect(cppstream::Collectors::summingLong<int>([](int value) { return value; })) == 10);
+              .collect(cppstream::Collectors::summingLong<int>([](int value) { return value; })) ==
+          10);
     CHECK(cppstream::Stream<int>::of({1, 2, 3, 4})
-              .collect(cppstream::Collectors::summingDouble<int>([](int value) { return value; })) ==
-          doctest::Approx(10.0));
+              .collect(cppstream::Collectors::summingDouble<int>(
+                  [](int value) { return value; })) == doctest::Approx(10.0));
 
     CHECK(cppstream::Stream<int>::of({1, 2, 3, 4})
               .collect(cppstream::Collectors::averagingInt<int>([](int value) { return value; })) ==
           doctest::Approx(2.5));
+    CHECK(cppstream::Stream<int>::of({1, 2, 3, 4})
+              .collect(cppstream::Collectors::averagingLong<int>([](int value) {
+                  return static_cast<std::int64_t>(value);
+              })) == doctest::Approx(2.5));
 
     // Java returns 0.0 for the empty case rather than NaN.
-    CHECK(cppstream::Stream<int>::empty().collect(
-              cppstream::Collectors::averagingDouble<int>([](int value) { return value; })) ==
-          doctest::Approx(0.0));
+    CHECK(cppstream::Stream<int>::empty().collect(cppstream::Collectors::averagingDouble<int>(
+              [](int value) { return value; })) == doctest::Approx(0.0));
+
+    // Java's double collectors are Kahan-compensated. Adding ten 0.1s naively
+    // gives 0.99999999999999989, so these are exact comparisons on purpose.
+    const std::vector<double> tenths(10, 0.1);
+    CHECK(cppstream::Stream<double>::of(tenths).collect(
+              cppstream::Collectors::summingDouble<double>([](double value) { return value; })) ==
+          1.0);
+    CHECK(cppstream::Stream<double>::of(tenths).collect(
+              cppstream::Collectors::averagingDouble<double>([](double value) { return value; })) ==
+          0.1);
 }
 
-TEST_CASE("minBy and maxBy carry Java's tie-breaking")
-{
+TEST_CASE("minBy and maxBy carry Java's tie-breaking") {
     using Pair = std::pair<int, int>;
     const std::vector<Pair> pairs{{1, 5}, {1, 9}, {0, 7}};
     const auto byKey = [](const Pair& pair) { return pair.first; };
@@ -144,11 +161,10 @@ TEST_CASE("minBy and maxBy carry Java's tie-breaking")
               .isEmpty());
 }
 
-TEST_CASE("the three reducing overloads")
-{
+TEST_CASE("the three reducing overloads") {
     CHECK(cppstream::Stream<int>::of({1, 2, 3, 4})
-              .collect(cppstream::Collectors::reducing<int>(0,
-                  [](int left, int right) { return left + right; })) == 10);
+              .collect(cppstream::Collectors::reducing<int>(
+                  0, [](int left, int right) { return left + right; })) == 10);
 
     CHECK(cppstream::Stream<int>::of({5, 2, 9})
               .collect(cppstream::Collectors::reducing<int>(
@@ -159,29 +175,29 @@ TEST_CASE("the three reducing overloads")
                   [](int left, int right) { return left + right; }))
               .isEmpty());
 
-    CHECK(cppstream::Stream<std::string>::of(words())
-              .collect(cppstream::Collectors::reducing<std::string, int>(0,
-                  [](const std::string& word) { return static_cast<int>(word.size()); },
+    CHECK(cppstream::Stream<std::string>::of(words()).collect(
+              cppstream::Collectors::reducing<std::string, int>(
+                  0, [](const std::string& word) { return static_cast<int>(word.size()); },
                   [](int left, int right) { return left + right; })) == 13);
 }
 
-TEST_CASE("mapping, filtering and flatMapping delegate to a downstream collector")
-{
-    const cppstream::ArrayList<int> lengths = cppstream::Stream<std::string>::of(words())
-        .collect(cppstream::Collectors::mapping<std::string>(
+TEST_CASE("mapping, filtering and flatMapping delegate to a downstream collector") {
+    const cppstream::ArrayList<int> lengths = cppstream::Stream<std::string>::of(words()).collect(
+        cppstream::Collectors::mapping<std::string>(
             [](const std::string& word) { return static_cast<int>(word.size()); },
             cppstream::Collectors::toList<int>()));
     CHECK(lengths.size() == 5);
     CHECK(lengths.get(0) == 5);
 
-    const cppstream::ArrayList<std::string> longWords = cppstream::Stream<std::string>::of(words())
-        .collect(cppstream::Collectors::filtering<std::string>(
-            [](const std::string& word) { return word.size() > 1; },
-            cppstream::Collectors::toList<std::string>()));
+    const cppstream::ArrayList<std::string> longWords =
+        cppstream::Stream<std::string>::of(words()).collect(
+            cppstream::Collectors::filtering<std::string>(
+                [](const std::string& word) { return word.size() > 1; },
+                cppstream::Collectors::toList<std::string>()));
     CHECK(longWords.size() == 4);
 
-    const cppstream::ArrayList<int> flat = cppstream::Stream<std::string>::of(words())
-        .collect(cppstream::Collectors::flatMapping<std::string>(
+    const cppstream::ArrayList<int> flat = cppstream::Stream<std::string>::of(words()).collect(
+        cppstream::Collectors::flatMapping<std::string>(
             [](const std::string& word) {
                 return cppstream::Stream<int>::of(static_cast<int>(word.size()), 100);
             },
@@ -189,22 +205,23 @@ TEST_CASE("mapping, filtering and flatMapping delegate to a downstream collector
     CHECK(flat.size() == 10);
 }
 
-TEST_CASE("teeing drives two collectors and merges their results")
-{
-    const std::string summary = cppstream::Stream<int>::of({1, 2, 3, 4})
-        .collect(cppstream::Collectors::teeing<int>(cppstream::Collectors::counting<int>(),
-            cppstream::Collectors::summingInt<int>([](int value) { return value; }),
-            [](std::int64_t count, int sum) {
-                return std::to_string(count) + ":" + std::to_string(sum);
-            }));
+TEST_CASE("teeing drives two collectors and merges their results") {
+    const std::string summary =
+        cppstream::Stream<int>::of({1, 2, 3, 4})
+            .collect(cppstream::Collectors::teeing<int>(
+                cppstream::Collectors::counting<int>(),
+                cppstream::Collectors::summingInt<int>([](int value) { return value; }),
+                [](std::int64_t count, int sum) {
+                    return std::to_string(count) + ":" + std::to_string(sum);
+                }));
     CHECK(summary == "4:10");
 }
 
-TEST_CASE("groupingBy groups by the classifier's key")
-{
+TEST_CASE("groupingBy groups by the classifier's key") {
     const cppstream::HashMap<bool, cppstream::ArrayList<int>> byParity =
-        cppstream::Stream<int>::of({1, 2, 3, 4, 5}).collect(
-            cppstream::Collectors::groupingBy<int>([](int value) { return value % 2 == 0; }));
+        cppstream::Stream<int>::of({1, 2, 3, 4, 5})
+            .collect(
+                cppstream::Collectors::groupingBy<int>([](int value) { return value % 2 == 0; }));
 
     CHECK(byParity.size() == 2);
     CHECK(byParity.get(true)->size() == 2);
@@ -216,20 +233,19 @@ TEST_CASE("groupingBy groups by the classifier's key")
     CHECK(byParity.get(false)->get(2) == 5);
 }
 
-TEST_CASE("groupingBy accepts a downstream collector")
-{
-    const cppstream::HashMap<std::string, int> counts = cppstream::Stream<std::string>::of(words())
-        .collect(cppstream::Collectors::groupingBy<std::string>(
-            [](const std::string& word) { return std::string(1, word.front()); },
-            cppstream::Collectors::summingInt<std::string>(
-                [](const std::string& word) { return static_cast<int>(word.size()); })));
+TEST_CASE("groupingBy accepts a downstream collector") {
+    const cppstream::HashMap<std::string, int> counts =
+        cppstream::Stream<std::string>::of(words()).collect(
+            cppstream::Collectors::groupingBy<std::string>(
+                [](const std::string& word) { return std::string(1, word.front()); },
+                cppstream::Collectors::summingInt<std::string>(
+                    [](const std::string& word) { return static_cast<int>(word.size()); })));
 
     CHECK(counts.get(std::string("a")) != nullptr);
     CHECK(*counts.get(std::string("a")) == 5);
 }
 
-TEST_CASE("partitioningBy always reports both partitions")
-{
+TEST_CASE("partitioningBy always reports both partitions") {
     const cppstream::HashMap<bool, cppstream::ArrayList<int>> partitioned =
         cppstream::Stream<int>::of({1, 3, 5}).collect(
             cppstream::Collectors::partitioningBy<int>([](int value) { return value % 2 == 0; }));
@@ -239,17 +255,17 @@ TEST_CASE("partitioningBy always reports both partitions")
     CHECK(partitioned.get(false)->size() == 3);
 
     const cppstream::HashMap<bool, std::int64_t> counted =
-        cppstream::Stream<int>::of({1, 2, 3, 4}).collect(
-        cppstream::Collectors::partitioningBy<int>([](int value) { return value % 2 == 0; },
-            cppstream::Collectors::counting<int>()));
+        cppstream::Stream<int>::of({1, 2, 3, 4})
+            .collect(cppstream::Collectors::partitioningBy<int>(
+                [](int value) { return value % 2 == 0; }, cppstream::Collectors::counting<int>()));
     CHECK(*counted.get(true) == 2);
     CHECK(*counted.get(false) == 2);
 }
 
-TEST_CASE("summarizingInt reports count, sum, min, max and average")
-{
-    const cppstream::IntSummaryStatistics statistics = cppstream::Stream<int>::of({4, 1, 7, 2})
-        .collect(cppstream::Collectors::summarizingInt<int>([](int value) { return value; }));
+TEST_CASE("summarizingInt reports count, sum, min, max and average") {
+    const cppstream::IntSummaryStatistics statistics =
+        cppstream::Stream<int>::of({4, 1, 7, 2})
+            .collect(cppstream::Collectors::summarizingInt<int>([](int value) { return value; }));
 
     CHECK(statistics.getCount() == 4);
     CHECK(statistics.getSum() == 14);
@@ -264,17 +280,26 @@ TEST_CASE("summarizingInt reports count, sum, min, max and average")
     CHECK(empty.getAverage() == doctest::Approx(0.0));
     CHECK(empty.getMin() == std::numeric_limits<int>::max());
 
-    const cppstream::LongSummaryStatistics longs = cppstream::Stream<int>::of({1, 2})
-        .collect(cppstream::Collectors::summarizingLong<int>([](int value) { return value; }));
+    const cppstream::LongSummaryStatistics longs = cppstream::Stream<int>::of({1, 2}).collect(
+        cppstream::Collectors::summarizingLong<int>([](int value) { return value; }));
     CHECK(longs.getSum() == 3);
 
-    const cppstream::DoubleSummaryStatistics doubles = cppstream::Stream<int>::of({1, 2})
-        .collect(cppstream::Collectors::summarizingDouble<int>([](int value) { return value; }));
+    const cppstream::DoubleSummaryStatistics doubles = cppstream::Stream<int>::of({1, 2}).collect(
+        cppstream::Collectors::summarizingDouble<int>([](int value) { return value; }));
     CHECK(doubles.getAverage() == doctest::Approx(1.5));
+
+    // The same compensated accumulation reaches summarizingDouble and the empty
+    // case is Java's 0.0, not NaN.
+    const std::vector<double> tenths(10, 0.1);
+    const cppstream::DoubleSummaryStatistics compensated =
+        cppstream::Stream<double>::of(tenths).collect(
+            cppstream::Collectors::summarizingDouble<double>([](double value) { return value; }));
+    CHECK(compensated.getSum() == 1.0);
+    CHECK(compensated.getAverage() == 0.1);
+    CHECK(cppstream::DoubleSummaryStatistics().getAverage() == 0.0);
 }
 
-TEST_CASE("container streams flow through the whole collector vocabulary")
-{
+TEST_CASE("container streams flow through the whole collector vocabulary") {
     const cppstream::HashSet<int> doubled = cppstream::ArrayList<int>{1, 2, 3}
                                                 .stream()
                                                 .map([](int value) { return value * 2; })

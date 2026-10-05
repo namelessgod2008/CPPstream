@@ -5,8 +5,7 @@
 #include <string>
 #include <vector>
 
-TEST_CASE("windowFixed partitions the stream and keeps the short tail")
-{
+TEST_CASE("windowFixed partitions the stream and keeps the short tail") {
     const cppstream::ArrayList<cppstream::ArrayList<int>> windows =
         cppstream::Stream<int>::of(std::vector<int>{1, 2, 3, 4, 5, 6, 7})
             .gather(cppstream::Gatherers::windowFixed<int>(3))
@@ -23,17 +22,15 @@ TEST_CASE("windowFixed partitions the stream and keeps the short tail")
               .count() == 2);
 
     // Nothing in, nothing out.
-    CHECK(cppstream::Stream<int>::empty()
-              .gather(cppstream::Gatherers::windowFixed<int>(3))
-              .count() == 0);
+    CHECK(
+        cppstream::Stream<int>::empty().gather(cppstream::Gatherers::windowFixed<int>(3)).count() ==
+        0);
 
-    CHECK_THROWS_AS(
-        static_cast<void>(cppstream::Gatherers::windowFixed<int>(0)),
-        cppstream::IllegalArgumentException);
+    CHECK_THROWS_AS(static_cast<void>(cppstream::Gatherers::windowFixed<int>(0)),
+                    cppstream::IllegalArgumentException);
 }
 
-TEST_CASE("windowSliding overlaps windows and drops the incomplete tail")
-{
+TEST_CASE("windowSliding overlaps windows and drops the incomplete tail") {
     const cppstream::ArrayList<cppstream::ArrayList<int>> windows =
         cppstream::Stream<int>::of(std::vector<int>{1, 2, 3, 4, 5})
             .gather(cppstream::Gatherers::windowSliding<int>(3))
@@ -49,13 +46,11 @@ TEST_CASE("windowSliding overlaps windows and drops the incomplete tail")
               .gather(cppstream::Gatherers::windowSliding<int>(3))
               .count() == 0);
 
-    CHECK_THROWS_AS(
-        static_cast<void>(cppstream::Gatherers::windowSliding<int>(-1)),
-        cppstream::IllegalArgumentException);
+    CHECK_THROWS_AS(static_cast<void>(cppstream::Gatherers::windowSliding<int>(-1)),
+                    cppstream::IllegalArgumentException);
 }
 
-TEST_CASE("fold emits exactly one element, and emits it even for an empty stream")
-{
+TEST_CASE("fold emits exactly one element, and emits it even for an empty stream") {
     const std::vector<int> folded =
         cppstream::Stream<int>::of(std::vector<int>{1, 2, 3, 4})
             .gather(cppstream::Gatherers::fold<int, int>(
@@ -74,8 +69,7 @@ TEST_CASE("fold emits exactly one element, and emits it even for an empty stream
               .get() == "empty");
 }
 
-TEST_CASE("scan emits the initial value and every intermediate accumulation")
-{
+TEST_CASE("scan emits the initial value and every intermediate accumulation") {
     const std::vector<int> scanned =
         cppstream::Stream<int>::of(std::vector<int>{1, 2, 3})
             .gather(cppstream::Gatherers::scan<int, int>(
@@ -92,8 +86,7 @@ TEST_CASE("scan emits the initial value and every intermediate accumulation")
               .get() == 7);
 }
 
-TEST_CASE("a hand-written stateless gatherer works through Gatherers::of")
-{
+TEST_CASE("a hand-written stateless gatherer works through Gatherers::of") {
     // Emits every element twice, which is the smallest thing a plain map cannot
     // do: many outputs per input.
     auto duplicated = cppstream::Gatherers::of<int, int>(
@@ -104,12 +97,12 @@ TEST_CASE("a hand-written stateless gatherer works through Gatherers::of")
             return true;
         });
 
-    CHECK(cppstream::Stream<int>::of(std::vector<int>{1, 2}).gather(duplicated).toList().toArray() ==
+    CHECK(
+        cppstream::Stream<int>::of(std::vector<int>{1, 2}).gather(duplicated).toList().toArray() ==
         std::vector<int>({1, 1, 2, 2}));
 }
 
-TEST_CASE("an integrator that returns false stops consumption immediately")
-{
+TEST_CASE("an integrator that returns false stops consumption immediately") {
     std::int64_t pulls = 0;
     auto pullCounter = [&pulls](int value) {
         ++pulls;
@@ -134,8 +127,7 @@ TEST_CASE("an integrator that returns false stops consumption immediately")
     CHECK(pulls == 3);
 }
 
-TEST_CASE("gather stays lazy and terminates on an infinite source")
-{
+TEST_CASE("gather stays lazy and terminates on an infinite source") {
     std::int64_t pulls = 0;
     auto countingSequence = [&pulls](int value) {
         ++pulls;
@@ -157,8 +149,7 @@ TEST_CASE("gather stays lazy and terminates on an infinite source")
     CHECK(pulls == 6);
 }
 
-TEST_CASE("gather composes with the rest of the pipeline")
-{
+TEST_CASE("gather composes with the rest of the pipeline") {
     const std::vector<int> result = cppstream::Stream<int>::of(std::vector<int>{1, 2, 3, 4, 5})
                                         .gather(cppstream::Gatherers::windowSliding<int>(2))
                                         .map([](const cppstream::ArrayList<int>& window) {
@@ -178,18 +169,16 @@ TEST_CASE("gather composes with the rest of the pipeline")
             static_cast<void>(downstream.push(state));
             return true;
         });
-    CHECK(cppstream::Stream<int>::of(std::vector<int>{1, 2})
-              .gather(labelled)
-              .toList()
-              .toArray() == std::vector<std::string>({"seen:1", "seen:12"}));
+    CHECK(cppstream::Stream<int>::of(std::vector<int>{1, 2}).gather(labelled).toList().toArray() ==
+          std::vector<std::string>({"seen:1", "seen:12"}));
 }
 
-TEST_CASE("a consumed stream cannot be gathered again")
-{
+TEST_CASE("a consumed stream cannot be gathered again") {
     auto stream = cppstream::Stream<int>::of(std::vector<int>{1, 2, 3});
     auto pipeline = std::move(stream).gather(cppstream::Gatherers::windowFixed<int>(2));
 
     CHECK(std::move(pipeline).count() == 2);
     // NOLINTNEXTLINE(bugprone-use-after-move): reusing the moved-from pipeline is the point.
-    CHECK_THROWS_AS(static_cast<void>(std::move(pipeline).count()), cppstream::IllegalStateException);
+    CHECK_THROWS_AS(static_cast<void>(std::move(pipeline).count()),
+                    cppstream::IllegalStateException);
 }

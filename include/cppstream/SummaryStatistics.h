@@ -1,11 +1,60 @@
 #pragma once
 
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <limits>
 #include <string>
 
 namespace cppstream {
+
+/// Java's compensated summation, shared by DoubleStream.sum()/average(),
+/// DoubleSummaryStatistics and the double collectors.
+///
+/// Java keeps three doubles: the running compensated sum, the low-order
+/// compensation term, and a plain total. The plain total only matters when an
+/// infinite input makes `sum + compensation` NaN; Java then falls back to it so
+/// the answer stays Infinity instead of turning into NaN. This is
+/// java.util.stream.Collectors#sumWithCompensation / #computeFinalSum kept
+/// verbatim, so the last bit matches the JDK rather than a naive loop.
+class KahanSummation {
+public:
+    /// One element, including the plain-total update Java's accept() does.
+    void accept(double value) noexcept {
+        simpleSum_ += value;
+        addCompensated(value);
+    }
+
+    /// Java: DoubleSummaryStatistics.combine / a collector's combiner.
+    void combine(const KahanSummation& other) noexcept {
+        simpleSum_ += other.simpleSum_;
+        addCompensated(other.sum_);
+        addCompensated(other.compensation_);
+    }
+
+    /// Java: Collectors.computeFinalSum.
+    [[nodiscard]] double total() const noexcept {
+        const double compensated = sum_ + compensation_;
+        if (std::isnan(compensated) && std::isinf(simpleSum_)) {
+            return simpleSum_;
+        }
+        return compensated;
+    }
+
+private:
+    /// Java: Collectors.sumWithCompensation. Deliberately does not touch the
+    /// plain total, because a combiner must not add the other side's sum twice.
+    void addCompensated(double value) noexcept {
+        const double corrected = value - compensation_;
+        const double next = sum_ + corrected;
+        compensation_ = (next - sum_) - corrected;
+        sum_ = next;
+    }
+
+    double sum_ = 0.0;
+    double compensation_ = 0.0;
+    double simpleSum_ = 0.0;
+};
 
 /// A port of java.util.IntSummaryStatistics.
 ///
@@ -45,9 +94,9 @@ public:
     }
 
     [[nodiscard]] std::string toString() const {
-        return "IntSummaryStatistics{count=" + std::to_string(count_) + ", sum=" + std::to_string(sum_) +
-               ", min=" + std::to_string(min_) + ", average=" + std::to_string(getAverage()) +
-               ", max=" + std::to_string(max_) + "}";
+        return "IntSummaryStatistics{count=" + std::to_string(count_) +
+               ", sum=" + std::to_string(sum_) + ", min=" + std::to_string(min_) +
+               ", average=" + std::to_string(getAverage()) + ", max=" + std::to_string(max_) + "}";
     }
 
 private:
@@ -84,9 +133,9 @@ public:
     }
 
     [[nodiscard]] std::string toString() const {
-        return "LongSummaryStatistics{count=" + std::to_string(count_) + ", sum=" + std::to_string(sum_) +
-               ", min=" + std::to_string(min_) + ", average=" + std::to_string(getAverage()) +
-               ", max=" + std::to_string(max_) + "}";
+        return "LongSummaryStatistics{count=" + std::to_string(count_) +
+               ", sum=" + std::to_string(sum_) + ", min=" + std::to_string(min_) +
+               ", average=" + std::to_string(getAverage()) + ", max=" + std::to_string(max_) + "}";
     }
 
 private:
@@ -104,15 +153,14 @@ private:
 /// minimum or the maximum (it only poisons the sum). std::min/std::max return the
 /// NaN instead, which would diverge from the API being mirrored.
 ///
-/// Java's version uses Kahan compensated summation internally and lets getSum()
-/// disagree slightly with the naive sum. This keeps the naive sum: correctness of
-/// the API matters more here than the last bit of the mantissa, and pretending to
-/// compensate without Java's exact algorithm would be a worse lie.
+/// Java's version uses Kahan compensated summation and lets getSum() disagree
+/// slightly with a naive sum. KahanSummation above reproduces that algorithm
+/// exactly, so getSum() and getAverage() agree with the JDK to the last bit.
 class DoubleSummaryStatistics {
 public:
     void accept(double value) noexcept {
         ++count_;
-        sum_ += value;
+        sum_.accept(value);
         // NOLINTNEXTLINE(readability-use-std-min-max): a NaN must not win, see above.
         if (value < min_) {
             min_ = value;
@@ -125,7 +173,7 @@ public:
 
     void combine(const DoubleSummaryStatistics& other) noexcept {
         count_ += other.count_;
-        sum_ += other.sum_;
+        sum_.combine(other.sum_);
         // NOLINTNEXTLINE(readability-use-std-min-max): a NaN must not win, see above.
         if (other.min_ < min_) {
             min_ = other.min_;
@@ -137,24 +185,27 @@ public:
     }
 
     [[nodiscard]] std::int64_t getCount() const noexcept { return count_; }
-    [[nodiscard]] double getSum() const noexcept { return sum_; }
+    /// Java: the compensated total, with the plain total as the infinite-input
+    /// fallback (see KahanSummation).
+    [[nodiscard]] double getSum() const noexcept { return sum_.total(); }
     [[nodiscard]] double getMin() const noexcept { return min_; }
     [[nodiscard]] double getMax() const noexcept { return max_; }
 
-    /// Java: NaN for an empty set (0/0), unlike the integral variants.
+    /// Java: 0.0 for an empty set, just like the integral variants -- only the
+    /// (unsupported) NaN division would produce NaN, which Java never does here.
     [[nodiscard]] double getAverage() const noexcept {
-        return count_ == 0 ? 0.0 : sum_ / static_cast<double>(count_);
+        return count_ == 0 ? 0.0 : sum_.total() / static_cast<double>(count_);
     }
 
     [[nodiscard]] std::string toString() const {
-        return "DoubleSummaryStatistics{count=" + std::to_string(count_) + ", sum=" + std::to_string(sum_) +
-               ", min=" + std::to_string(min_) + ", average=" + std::to_string(getAverage()) +
-               ", max=" + std::to_string(max_) + "}";
+        return "DoubleSummaryStatistics{count=" + std::to_string(count_) +
+               ", sum=" + std::to_string(getSum()) + ", min=" + std::to_string(min_) +
+               ", average=" + std::to_string(getAverage()) + ", max=" + std::to_string(max_) + "}";
     }
 
 private:
     std::int64_t count_ = 0;
-    double sum_ = 0.0;
+    KahanSummation sum_;
     double min_ = std::numeric_limits<double>::infinity();
     double max_ = -std::numeric_limits<double>::infinity();
 };

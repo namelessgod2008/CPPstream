@@ -157,7 +157,8 @@ public:
         return Optional<V>::of(position->second);
     }
 
-    Optional<V> computeIfPresent(const K& key,
+    Optional<V> computeIfPresent(
+        const K& key,
         const std::function<Optional<V>(const K&, const V&)>& remappingFunction) override {
         this->checkNotFrozen();
         auto found = entries_.find(key);
@@ -174,7 +175,8 @@ public:
         return Optional<V>::of(found->second);
     }
 
-    Optional<V> merge(const K& key, const V& value,
+    Optional<V> merge(
+        const K& key, const V& value,
         const std::function<Optional<V>(const V&, const V&)>& remappingFunction) override {
         this->checkNotFrozen();
         requireNonNull(key);

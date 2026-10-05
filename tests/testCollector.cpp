@@ -20,8 +20,7 @@ cppstream::Collector<int, int, int> summingCollector() {
 
 }  // namespace
 
-TEST_CASE("Collector exposes Java's four functions and its characteristics")
-{
+TEST_CASE("Collector exposes Java's four functions and its characteristics") {
     const cppstream::Collector<int, int, int> collector = summingCollector();
 
     CHECK(collector.has(cppstream::Characteristics::identityFinish));
@@ -35,8 +34,7 @@ TEST_CASE("Collector exposes Java's four functions and its characteristics")
     CHECK(collector.finisher()(std::move(accumulator)) == 41);
 }
 
-TEST_CASE("Collectors are copyable specification objects")
-{
+TEST_CASE("Collectors are copyable specification objects") {
     // The pipeline is move-only; the collector is not. That asymmetry is what
     // lets the combinators hold a downstream collector by value.
     const cppstream::Collector<int, int, int> original = summingCollector();
@@ -46,21 +44,17 @@ TEST_CASE("Collectors are copyable specification objects")
     CHECK(std::move(original).finisher()(0) == 0);
 }
 
-TEST_CASE("Stream.collect drives supplier, accumulator and finisher once")
-{
-    const int total = cppstream::Stream<int>::of({1, 2, 3, 4})
-                          .collect(summingCollector());
+TEST_CASE("Stream.collect drives supplier, accumulator and finisher once") {
+    const int total = cppstream::Stream<int>::of({1, 2, 3, 4}).collect(summingCollector());
     CHECK(total == 10);
 }
 
-TEST_CASE("Stream.collect on an empty stream uses the supplier alone")
-{
+TEST_CASE("Stream.collect on an empty stream uses the supplier alone") {
     const int total = cppstream::Stream<int>::of(std::vector<int>{}).collect(summingCollector());
     CHECK(total == 0);
 }
 
-TEST_CASE("collect is a terminal operation and consumes the stream")
-{
+TEST_CASE("collect is a terminal operation and consumes the stream") {
     cppstream::Stream<int> stream = cppstream::Stream<int>::of({1, 2, 3});
     CHECK(std::move(stream).collect(summingCollector()) == 6);
 
@@ -68,11 +62,10 @@ TEST_CASE("collect is a terminal operation and consumes the stream")
     // behave after a terminal operation.
     // NOLINTNEXTLINE(bugprone-use-after-move): reusing the moved-from stream is the point.
     CHECK_THROWS_AS(static_cast<void>(std::move(stream).collect(summingCollector())),
-        cppstream::IllegalStateException);
+                    cppstream::IllegalStateException);
 }
 
-TEST_CASE("toList returns a frozen ArrayList")
-{
+TEST_CASE("toList returns a frozen ArrayList") {
     const cppstream::ArrayList<int> list = cppstream::Stream<int>::of({3, 1, 2}).toList();
 
     CHECK(list.size() == 3);
@@ -88,15 +81,14 @@ TEST_CASE("toList returns a frozen ArrayList")
     CHECK_THROWS_AS(mutableCopy.removeAt(0), cppstream::UnsupportedOperationException);
     CHECK_THROWS_AS(mutableCopy.clear(), cppstream::UnsupportedOperationException);
     CHECK_THROWS_AS(static_cast<void>(mutableCopy.listIterator()->remove()),
-        cppstream::UnsupportedOperationException);
+                    cppstream::UnsupportedOperationException);
 
     // A copy of a frozen list is also frozen: freeze is a property of the value,
     // not of one handle to it.
     CHECK(mutableCopy.isFrozen());
 }
 
-TEST_CASE("sum and average are constrained to arithmetic element types")
-{
+TEST_CASE("sum and average are constrained to arithmetic element types") {
     CHECK(cppstream::Stream<int>::of({1, 2, 3, 4}).sum() == 10);
     CHECK(cppstream::Stream<double>::of({1.5, 2.5}).sum() == doctest::Approx(4.0));
 
@@ -106,4 +98,10 @@ TEST_CASE("sum and average are constrained to arithmetic element types")
     // Java's IntStream.average() is OptionalDouble and stays empty for no input.
     CHECK(cppstream::Stream<int>::of(std::vector<int>{}).average().isEmpty());
     CHECK(cppstream::Stream<int>::empty().sum() == 0);
+
+    // Java's DoubleStream.sum()/average() are Kahan-compensated, so ten naive
+    // 0.1 additions give exactly 1.0 and 0.1 rather than 0.99999999999999989.
+    const std::vector<double> tenths(10, 0.1);
+    CHECK(cppstream::Stream<double>::of(tenths).sum() == 1.0);
+    CHECK(cppstream::Stream<double>::of(tenths).average().get() == 0.1);
 }

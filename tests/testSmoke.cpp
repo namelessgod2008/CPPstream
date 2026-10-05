@@ -1,18 +1,16 @@
-#include <doctest/doctest.h>
-
 #include <cppstream/cppstream.h>
+
+#include <doctest/doctest.h>
 
 #include <string_view>
 #include <type_traits>
 
-TEST_CASE("toolchain provides the C++23 features the library depends on")
-{
+TEST_CASE("toolchain provides the C++23 features the library depends on") {
     CHECK(cppstream::hasMoveOnlyFunction);
     CHECK(cppstream::hasOptionalMonadic);
 }
 
-TEST_CASE("library version metadata is available")
-{
+TEST_CASE("library version metadata is available") {
     CHECK(cppstream::versionMajor == 0);
     CHECK(cppstream::versionMinor == 1);
     CHECK(cppstream::versionPatch == 0);
