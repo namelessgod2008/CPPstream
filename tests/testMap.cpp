@@ -2,6 +2,7 @@
 
 #include <doctest/doctest.h>
 
+#include <algorithm>
 #include <cstddef>
 #include <string>
 #include <vector>
@@ -269,6 +270,82 @@ TEST_CASE("putAll copies every mapping") {
 
     CHECK(destination.size() == 2);
     CHECK(*destination.get(std::string("ada")) == 36);
+}
+
+TEST_CASE("compute, replace, replaceAll and remove(key, value)") {
+    cppstream::HashMap<std::string, int> values;
+    values.put(std::string("a"), 1);
+
+    CHECK(values
+              .compute(std::string("a"),
+                       [](const std::string&, const int* current) {
+                           return cppstream::Optional<int>::of(current == nullptr ? 1 : *current + 1);
+                       })
+              .get() == 2);
+    CHECK(values
+              .compute(std::string("b"),
+                       [](const std::string&, const int* current) {
+                           return cppstream::Optional<int>::of(current == nullptr ? 10 : *current);
+                       })
+              .get() == 10);
+
+    CHECK(values.replace(std::string("b"), 11).get() == 10);
+    CHECK(values.replace(std::string("missing"), 1).isEmpty());
+    CHECK(values.replace(std::string("b"), 11, 12));
+    CHECK_FALSE(values.replace(std::string("b"), 11, 13));
+
+    values.replaceAll([](const std::string&, int value) { return value * 2; });
+    CHECK(*values.get(std::string("b")) == 24);
+
+    CHECK(values.remove(std::string("b"), 24));
+    CHECK_FALSE(values.remove(std::string("b"), 24));
+    CHECK_FALSE(values.containsKey(std::string("b")));
+
+    static_cast<void>(values.compute(std::string("a"), [](const std::string&, const int*) {
+        return cppstream::Optional<int>::empty();
+    }));
+    CHECK_FALSE(values.containsKey(std::string("a")));
+}
+
+TEST_CASE("compute returns the installed value for non-trivial types") {
+    cppstream::HashMap<std::string, std::string> names;
+
+    CHECK(names
+              .compute(std::string("ada"),
+                       [](const std::string&, const std::string*) {
+                           return cppstream::Optional<std::string>::of(std::string("Ada Lovelace"));
+                       })
+              .get() == "Ada Lovelace");
+    CHECK(*names.get(std::string("ada")) == "Ada Lovelace");
+
+    CHECK(names
+              .compute(std::string("ada"),
+                       [](const std::string&, const std::string* current) {
+                           return cppstream::Optional<std::string>::of(*current + " (scientist)");
+                       })
+              .get() == "Ada Lovelace (scientist)");
+    CHECK(*names.get(std::string("ada")) == "Ada Lovelace (scientist)");
+}
+
+TEST_CASE("Map.Entry comparator factories order entries by key or value") {
+    using Entry = cppstream::HashMap<int, std::string>::Entry;
+
+    cppstream::HashMap<int, std::string> values;
+    values.put(2, std::string("two"));
+    values.put(1, std::string("one"));
+    values.put(3, std::string("three"));
+
+    std::vector<Entry> byKey = values.entrySet().toArray();
+    std::sort(byKey.begin(), byKey.end(), Entry::comparingByKey());
+    CHECK(byKey[0].getKey() == 1);
+    CHECK(byKey[1].getKey() == 2);
+    CHECK(byKey[2].getKey() == 3);
+
+    std::vector<Entry> byValue = values.entrySet().toArray();
+    std::sort(byValue.begin(), byValue.end(), Entry::comparingByValue());
+    CHECK(byValue[0].getValue() == "one");
+    CHECK(byValue[1].getValue() == "three");
+    CHECK(byValue[2].getValue() == "two");
 }
 
 TEST_CASE("TreeMap.descendingMap is a live view of the same map") {

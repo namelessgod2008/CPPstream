@@ -28,6 +28,7 @@ public:
     using valueType = V;
     using Entries = std::unordered_map<K, V, Hash, Equal>;
     using Entry = Map<K, V>::Entry;
+    using Map<K, V>::remove;
 
     HashMap() = default;
 

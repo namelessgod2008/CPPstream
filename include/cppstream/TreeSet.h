@@ -249,6 +249,11 @@ public:
     [[nodiscard]] TreeSetRangeView<T, Compare> descendingSet();
     [[nodiscard]] TreeSetRangeView<T, Compare> descendingSet() const;
 
+    /// Java 21: SequencedCollection.reversed(). For a sorted set this is the same
+    /// live, reverse-ordered view as descendingSet().
+    [[nodiscard]] TreeSetRangeView<T, Compare> reversed() { return descendingSet(); }
+    [[nodiscard]] TreeSetRangeView<T, Compare> reversed() const { return descendingSet(); }
+
     /// Java: NavigableSet.descendingIterator().
     [[nodiscard]] std::unique_ptr<Iterator<T>> descendingIterator() {
         return std::make_unique<TreeSetDescendingIterator>(*this);
@@ -678,6 +683,10 @@ public:
     [[nodiscard]] TreeSetRangeView descendingSet() const {
         return TreeSetRangeView(*backing_, from_, fromInclusive_, to_, toInclusive_, !descending_);
     }
+
+    /// Java 21: SequencedCollection.reversed() on a window.
+    [[nodiscard]] TreeSetRangeView reversed() { return descendingSet(); }
+    [[nodiscard]] TreeSetRangeView reversed() const { return descendingSet(); }
 
     /// Java: NavigableSet.descendingIterator(). Note this is the *opposite* of the
     /// view's own order, so on an already-descending view it walks forwards --

@@ -3,6 +3,7 @@
 #include <cppstream/Collector.h>
 #include <cppstream/Comparator.h>
 #include <cppstream/Gatherer.h>
+#include <cppstream/Iterator.h>
 #include <cppstream/Optional.h>
 #include <cppstream/Parallel.h>
 #include <cppstream/RuntimeException.h>
@@ -30,6 +31,13 @@ namespace cppstream {
 
 template <class T>
 class Stream;
+
+/// Shared by every stage of one pipeline so that onClose() handlers added at any
+/// point are run exactly once by close(), whichever stage receives the call.
+struct StreamCloseState {
+    std::vector<std::function<void()>> handlers;
+    bool closed = false;
+};
 
 /// Detects Stream<U> for any U, used to constrain flatMap.
 template <class V>
@@ -117,8 +125,13 @@ public:
     /// mix-up is caught by the parallel tests rather than by the type system.
     // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
     explicit Stream(NextFn next, SizeHint sizeHint = std::nullopt, Budget budget = std::nullopt,
-                    bool parallel = false)
-        : next_(std::move(next)), sizeHint_(sizeHint), budget_(budget), parallel_(parallel) {}
+                    bool parallel = false,
+                    std::shared_ptr<StreamCloseState> closeState = nullptr)
+        : next_(std::move(next)),
+          sizeHint_(sizeHint),
+          budget_(budget),
+          parallel_(parallel),
+          closeState_(std::move(closeState)) {}
 
     Stream(Stream&&) noexcept = default;
     Stream& operator=(Stream&&) noexcept = default;
@@ -131,6 +144,95 @@ public:
 
     /// The pull budget this stage was built with. See Budget.
     [[nodiscard]] Budget budget() const noexcept { return budget_; }
+
+    // -----------------------------------------------------------------------
+    // Lifecycle and iteration entry points
+    // -----------------------------------------------------------------------
+
+    /// Java: BaseStream.onClose(handler). The handler runs when close() is called,
+    /// in registration order. Terminal operations do not close implicitly, just as
+    /// they do not in Java; use close() or a scope guard at the call site.
+    template <class F>
+        requires std::invocable<F&>
+    Stream<T> onClose(F handler) && {
+        NextFn previous = takeNext();
+        std::shared_ptr<StreamCloseState> state =
+            closeState_ ? closeState_ : std::make_shared<StreamCloseState>();
+        state->handlers.emplace_back(std::move(handler));
+        return Stream<T>(std::move(previous), sizeHint_, budget_, parallel_, std::move(state));
+    }
+
+    /// Java: BaseStream.close(). Idempotent; every handler runs at most once.
+    void close() {
+        next_ = nullptr;
+        std::shared_ptr<StreamCloseState> state = std::move(closeState_);
+        if (!state || state->closed) {
+            return;
+        }
+        state->closed = true;
+        for (const auto& handler : state->handlers) {
+            std::invoke(handler);
+        }
+    }
+
+    /// Java: BaseStream.iterator(). Consumes the stream and hands out its elements;
+    /// the iterator is a one-shot cursor over the same pull stage.
+    [[nodiscard]] std::unique_ptr<Iterator<T>> iterator() && {
+        return std::make_unique<StreamIterator>(takeNext());
+    }
+
+    /// Java: Stream.Builder<T>. C++ cannot infer the element type from the call
+    /// site, so the builder is reached through Stream<T>::builder().
+    class Builder {
+    public:
+        Builder() = default;
+
+        Builder& add(const T& value) {
+            return addValue(value);
+        }
+        Builder& add(T&& value) {
+            return addValue(std::move(value));
+        }
+
+        /// Java: Stream.Builder.accept(value), an alias for add(value).
+        void accept(const T& value) { static_cast<void>(add(value)); }
+        void accept(T&& value) { static_cast<void>(add(std::move(value))); }
+
+        /// Java: Stream.Builder.build(). The builder is single-use; adding after
+        /// build() throws IllegalStateException, as in Java.
+        Stream<T> build() {
+            if (built_) {
+                throw IllegalStateException("stream has already been built");
+            }
+            built_ = true;
+            const std::size_t promised = values_.size();
+            return Stream<T>(
+                NextFn([values = std::move(values_), index = std::size_t{0}]() mutable
+                           -> std::optional<T> {
+                    if (index >= values.size()) {
+                        return std::nullopt;
+                    }
+                    return std::optional<T>(std::in_place, std::move(values[index++]));
+                }),
+                promised, promised);
+        }
+
+    private:
+        template <class U>
+        Builder& addValue(U&& value) {
+            if (built_) {
+                throw IllegalStateException("stream has already been built");
+            }
+            values_.push_back(std::forward<U>(value));
+            return *this;
+        }
+
+        std::vector<T> values_;
+        bool built_ = false;
+    };
+
+    /// Java: Stream.builder().
+    static Builder builder() { return Builder(); }
 
     // -----------------------------------------------------------------------
     // Intermediate operations
@@ -150,7 +252,7 @@ public:
                             }
                             return std::nullopt;
                         }),
-            std::nullopt, budget_, parallel_);
+            std::nullopt, budget_, parallel_, closeState_);
     }
 
     /// Java: Stream.map(mapper).
@@ -166,7 +268,7 @@ public:
                              [mapper = std::move(mapper)](T& value) -> std::optional<R> {
                                  return std::optional<R>(std::in_place, std::invoke(mapper, value));
                              }),
-                         promised, budget_, parallel_);
+                         promised, budget_, parallel_, closeState_);
     }
 
     /// Java: Stream.flatMap(mapper), where the mapper returns a Stream per
@@ -190,7 +292,7 @@ public:
                          [mapper = std::move(mapper)](T& value) -> Inner {
                              return std::invoke(mapper, value);
                          }),
-                     std::nullopt, std::nullopt, parallel_);
+                     std::nullopt, std::nullopt, parallel_, closeState_);
     }
 
     /// Java 16: Stream.mapMulti(mapper), the imperative counterpart of flatMap.
@@ -280,7 +382,7 @@ public:
                         }
                     }
                 }),
-            std::nullopt, std::nullopt, parallel_);
+            std::nullopt, std::nullopt, parallel_, closeState_);
     }
 
     /// Java: Stream.peek(action). A pure side-effect hook; elements pass through
@@ -298,7 +400,7 @@ public:
                                          std::invoke(action, value);
                                          return std::optional<T>(std::in_place, std::move(value));
                                      }),
-                         promised, budget_, parallel_);
+                         promised, budget_, parallel_, closeState_);
     }
 
     /// Java: Stream.distinct(). Keeps the first occurrence of each element and
@@ -322,7 +424,7 @@ public:
                                  }
                              }
                          }),
-                         std::nullopt, budget_, parallel_);
+                         std::nullopt, budget_, parallel_, closeState_);
     }
 
     /// Java: Stream.sorted(). Requires operator< on T.
@@ -358,7 +460,7 @@ public:
                              // NOLINTNEXTLINE(readability-redundant-parentheses)
                              return std::optional<T>(std::in_place, std::move((*buffer)[index++]));
                          }),
-                         promised, budget_, parallel_);
+                         promised, budget_, parallel_, closeState_);
     }
 
     /// Not a Java Stream method: mirrors SequencedCollection.reversed()
@@ -387,7 +489,7 @@ public:
                              // NOLINTNEXTLINE(readability-redundant-parentheses)
                              return std::optional<T>(std::in_place, std::move((*buffer)[position]));
                          }),
-                         promised, budget_, parallel_);
+                         promised, budget_, parallel_, closeState_);
     }
 
     /// Java: Stream.limit(maxSize).
@@ -411,7 +513,7 @@ public:
                              --remaining;
                              return value;
                          }),
-                         promised, limited(budget_, maxSize), parallel_);
+                         promised, limited(budget_, maxSize), parallel_, closeState_);
     }
 
     /// Java: Stream.skip(n).
@@ -432,7 +534,7 @@ public:
                 }
                 return previous();
             }),
-            promised, skipped(budget_, n), parallel_);
+            promised, skipped(budget_, n), parallel_, closeState_);
     }
 
     /// Java 9: Stream.takeWhile(predicate).
@@ -451,7 +553,7 @@ public:
                              }
                              return value;
                          }),
-                         std::nullopt, budget_, parallel_);
+                         std::nullopt, budget_, parallel_, closeState_);
     }
 
     /// Java 9: Stream.dropWhile(predicate).
@@ -473,7 +575,7 @@ public:
                              }
                              return previous();
                          }),
-                         std::nullopt, budget_, parallel_);
+                         std::nullopt, budget_, parallel_, closeState_);
     }
 
     /// Java: Stream.unordered(). A no-op here, and permitted to be one: Java
@@ -558,6 +660,24 @@ public:
         return result;
     }
 
+    /// Java: Stream.toArray(IntFunction). C++ has no array type to manufacture,
+    /// so the generator receives the current size hint and returns the vector whose
+    /// capacity it wants to provide. The result is still resized to the elements
+    /// actually produced, so a wrong hint can only cost an allocation.
+    template <class F>
+        requires std::invocable<F&, std::size_t> &&
+                 std::same_as<std::remove_cvref_t<std::invoke_result_t<F&, std::size_t>>,
+                              std::vector<T>>
+    [[nodiscard]] std::vector<T> toArray(F generator) && {
+        NextFn next = takeNext();
+        std::vector<T> result = std::invoke(generator, sizeHint_.value_or(0));
+        result.clear();
+        while (std::optional<T> value = next()) {
+            result.push_back(std::move(*value));
+        }
+        return result;
+    }
+
     /// Java: Stream.collect(collector).
     ///
     /// The reduce-all form: supplier -> accumulate every element -> finish. The
@@ -595,6 +715,28 @@ public:
         runParallelReduce<Accumulator>(next, batchingCount(), supplier, accumulate,
                                        collector.combiner(), merged);
         return std::invoke(collector.finisher(), std::move(merged));
+    }
+
+    /// Java: Stream.collect(supplier, accumulator, combiner). Unlike the Collector
+    /// overload this one has no finisher: the accumulator is the result.
+    template <class S, class A, class C>
+        requires std::invocable<S&> && std::invocable<A&, std::remove_cvref_t<
+                                          std::invoke_result_t<S&>>&, T&> &&
+                 std::invocable<C&, std::remove_cvref_t<std::invoke_result_t<S&>>&&,
+                                std::remove_cvref_t<std::invoke_result_t<S&>>&&>
+    [[nodiscard]] auto collect(S supplier, A accumulator, C combiner) &&
+        -> std::remove_cvref_t<std::invoke_result_t<S&>> {
+        using R = std::remove_cvref_t<std::invoke_result_t<S&>>;
+        NextFn next = takeNext();
+        R result = std::invoke(supplier);
+        if (!canBatchTerminal()) {
+            while (std::optional<T> value = next()) {
+                std::invoke(accumulator, result, *value);
+            }
+            return result;
+        }
+        runParallelReduce<R>(next, batchingCount(), supplier, accumulator, combiner, result);
+        return result;
     }
 
     /// Java: Stream.toList(), which returns an unmodifiable List.
@@ -776,6 +918,30 @@ public:
         return std::invoke(accumulator, std::move(identity), std::move(reduced.get()));
     }
 
+    /// Java: Stream.reduce(identity, accumulator, combiner). U may differ from T;
+    /// the combiner is required for a parallel run and is never called when the
+    /// upstream is unbounded or the stream is sequential.
+    template <class U, class A, class C>
+        requires std::invocable<A&, U&&, T&> && std::invocable<C&, U&&, U&&>
+    [[nodiscard]] U reduce(U identity, A accumulator, C combiner) && {
+        NextFn next = takeNext();
+        U seed = identity;
+        U result = std::move(identity);
+        if (!canBatchTerminal()) {
+            while (std::optional<T> value = next()) {
+                result = std::invoke(accumulator, std::move(result), *value);
+            }
+            return result;
+        }
+        runParallelReduce<U>(
+            next, batchingCount(), [&seed] { return seed; },
+            [&accumulator](U& run, T& element) {
+                run = std::invoke(accumulator, std::move(run), element);
+            },
+            std::move(combiner), result);
+        return result;
+    }
+
     /// Java: Stream.min(comparator). Ties keep the first minimal element, in a
     /// parallel pipeline as well: the merge prefers its left-hand side.
     [[nodiscard]] Optional<T> min(const Comparator<T>& comparator) && {
@@ -872,11 +1038,15 @@ public:
     /// flatMap's inner streams, mapMulti and gather, which are stateful or 1:N and
     /// therefore keep a sequential barrier. See DESIGN.md divergence 8 and section
     /// 7.10 for the full table.
-    Stream<T> parallel() && { return Stream<T>(takeNext(), sizeHint_, budget_, true); }
+    Stream<T> parallel() && {
+        return Stream<T>(takeNext(), sizeHint_, budget_, true, closeState_);
+    }
 
     /// Java: Stream.sequential(). Turns batching off again from this point on;
     /// the stages already built keep whatever they were built with.
-    Stream<T> sequential() && { return Stream<T>(takeNext(), sizeHint_, budget_, false); }
+    Stream<T> sequential() && {
+        return Stream<T>(takeNext(), sizeHint_, budget_, false, closeState_);
+    }
 
     /// Java: Stream.isParallel().
     [[nodiscard]] bool isParallel() const noexcept { return parallel_; }
@@ -1031,6 +1201,26 @@ public:
     static Stream<T> concat(Stream<T> first, Stream<T> second) {
         const SizeHint promised = combined(first.sizeHint(), second.sizeHint());
         const Budget budget = combined(first.budget(), second.budget());
+        std::shared_ptr<StreamCloseState> closeState;
+        if (first.closeState_ || second.closeState_) {
+            closeState = std::make_shared<StreamCloseState>();
+            const auto append = [closeState](const std::shared_ptr<StreamCloseState>& state) {
+                if (!state) {
+                    return;
+                }
+                closeState->handlers.push_back([state] {
+                    if (state->closed) {
+                        return;
+                    }
+                    state->closed = true;
+                    for (const auto& handler : state->handlers) {
+                        std::invoke(handler);
+                    }
+                });
+            };
+            append(first.closeState_);
+            append(second.closeState_);
+        }
         NextFn firstNext = std::move(first).takeNext();
         NextFn secondNext = std::move(second).takeNext();
         return Stream<T>(
@@ -1045,7 +1235,7 @@ public:
                 }
                 return secondNext();
             }),
-            promised, budget);
+            promised, budget, false, std::move(closeState));
     }
 
     /// Java: IntStream.range(startInclusive, endExclusive), generalised over any
@@ -1446,6 +1636,41 @@ private:
         return taken;
     }
 
+    /// The one-shot read path behind Stream::iterator(). It keeps a lookahead so
+    /// that Iterator::hasNext() does not have to be destructive.
+    class StreamIterator final : public Iterator<T> {
+    public:
+        explicit StreamIterator(NextFn next) : next_(std::move(next)) {}
+
+        [[nodiscard]] bool hasNext() const override {
+            if (done_) {
+                return false;
+            }
+            if (!lookahead_) {
+                lookahead_ = next_();
+                if (!lookahead_) {
+                    done_ = true;
+                }
+            }
+            return lookahead_.has_value();
+        }
+
+        T& next() override {
+            if (!hasNext()) {
+                throw NoSuchElementException("iterator exhausted");
+            }
+            last_ = std::move(*lookahead_);
+            lookahead_.reset();
+            return *last_;
+        }
+
+    private:
+        mutable NextFn next_;
+        mutable std::optional<T> lookahead_;
+        mutable bool done_ = false;
+        std::optional<T> last_;
+    };
+
     NextFn next_;
 
     /// See SizeHint. Never read by anything that would be wrong without it.
@@ -1458,6 +1683,9 @@ private:
 
     /// Set by parallel() and carried by every stage built from it onward.
     bool parallel_ = false;
+
+    /// Shared with every stage derived from this one. See StreamCloseState.
+    std::shared_ptr<StreamCloseState> closeState_;
 
     /// flatMap drives an inner stream of a different instantiation, so every
     /// instantiation must be able to reach takeNext().

@@ -25,6 +25,8 @@ namespace cppstream {
 template <class T>
 class AbstractCollection : public Collection<T> {
 public:
+    using Collection<T>::toArray;
+
     // Every unqualified call below needs `this->`: size/iterator/constIterator are
     // members of the dependent base Collection<T>, so ordinary lookup at template
     // definition time cannot find them.

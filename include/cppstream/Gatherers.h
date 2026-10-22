@@ -17,13 +17,28 @@ namespace cppstream {
 /// keeps static factories on a plural utility class instead, the same way
 /// List.of became Lists::of (divergence 6).
 ///
-/// Missing: mapConcurrent, which is defined entirely in terms of a virtual
-/// thread per element and has no meaning without one. The parallel streams this
-/// library does have are not a substitute: their unit of work is a batch of one
-/// stage, not a thread per element, and a sequential mapConcurrent is just
-/// Stream::map (see DESIGN.md divergence 8).
 class Gatherers {
 public:
+    /// Java: Gatherers.mapConcurrent(maxConcurrency, mapper). The current gather
+    /// bridge is a barrier, so the work is performed in encounter order on the
+    /// calling thread; maxConcurrency is validated but cannot create virtual
+    /// threads in C++. The observable result is the same as Java's ordered
+    /// mapConcurrent.
+    template <class T, class R, class F>
+        requires std::is_invocable_r_v<R, F&, const T&>
+    [[nodiscard]] static Gatherer<T, Void, R> mapConcurrent(int maxConcurrency, F mapper) {
+        if (maxConcurrency <= 0) {
+            throw IllegalArgumentException("maxConcurrency must be greater than zero: " +
+                                           std::to_string(maxConcurrency));
+        }
+        return Gatherer<T, Void, R>(
+            [mapper = std::move(mapper)](Void&, const T& element,
+                                         Downstream<R>& downstream) {
+                static_cast<void>(downstream.push(std::invoke(mapper, element)));
+                return true;
+            });
+    }
+
     /// Java: Gatherers.windowFixed(windowSize), a non-overlapping partition.
     ///
     /// The last window may be short: Java emits it from the finisher, and so does

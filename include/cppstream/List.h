@@ -5,6 +5,7 @@
 #include <cppstream/Comparator.h>
 
 #include <algorithm>
+#include <functional>
 #include <memory>
 #include <string>
 #include <utility>
@@ -102,6 +103,69 @@ public:
 
     /// Java: List.sort(comparator).
     virtual void sort(const Comparator<T>& comparator) = 0;
+
+    /// Java: List.replaceAll(function). A member template, so it cannot be
+    /// virtual; it is expressed with get/set and therefore works on every List.
+    template <class F>
+    void replaceAll(F function) {
+        const int length = this->size();
+        for (int index = 0; index < length; ++index) {
+            T replacement = std::invoke(function, get(index));
+            static_cast<void>(set(index, std::move(replacement)));
+        }
+    }
+
+    /// Java 21: SequencedCollection.addFirst(element).
+    void addFirst(const T& element) { add(0, element); }
+    void addFirst(T&& element) { add(0, std::move(element)); }
+
+    /// Java 21: SequencedCollection.addLast(element).
+    void addLast(const T& element) { static_cast<void>(add(element)); }
+    void addLast(T&& element) { static_cast<void>(add(std::move(element))); }
+
+    /// Java 21: SequencedCollection.getFirst().
+    T& getFirst() {
+        requireNotEmpty();
+        return get(0);
+    }
+    [[nodiscard]] const T& getFirst() const {
+        requireNotEmpty();
+        return get(0);
+    }
+
+    /// Java 21: SequencedCollection.getLast().
+    T& getLast() {
+        requireNotEmpty();
+        return get(this->size() - 1);
+    }
+    [[nodiscard]] const T& getLast() const {
+        requireNotEmpty();
+        return get(this->size() - 1);
+    }
+
+    /// Java 21: SequencedCollection.removeFirst().
+    T removeFirst() {
+        requireNotEmpty();
+        return removeAt(0);
+    }
+
+    /// Java 21: SequencedCollection.removeLast().
+    T removeLast() {
+        requireNotEmpty();
+        return removeAt(this->size() - 1);
+    }
+
+    /// Java 21: List.reversed(), a live view in reverse order. Returned by pointer
+    /// for the same reason as subList: it is a view, not a value.
+    [[nodiscard]] std::unique_ptr<List<T>> reversed();
+    [[nodiscard]] std::unique_ptr<List<T>> reversed() const;
+
+private:
+    void requireNotEmpty() const {
+        if (this->isEmpty()) {
+            throw NoSuchElementException("List is empty");
+        }
+    }
 };
 
 /// A port of the view that java.util.AbstractList.subList returns.
@@ -134,17 +198,21 @@ public:
     using List<T>::addAll;
 
     /// Java: AbstractList.subList(fromIndex, toIndex) on a mutable list.
-    ListView(List<T>& backing, int fromIndex, int toIndex)
+    ListView(List<T>& backing, int fromIndex, int toIndex, bool reversed = false)
         : backing_(&backing),
           writableBacking_(&backing),
           offset_(fromIndex),
-          length_(toIndex - fromIndex) {
+          length_(toIndex - fromIndex),
+          reversed_(reversed) {
         validate(backing.size(), fromIndex, toIndex);
     }
 
     /// The read-only form, built by the const overload of List::subList.
-    ListView(const List<T>& backing, int fromIndex, int toIndex)
-        : backing_(&backing), offset_(fromIndex), length_(toIndex - fromIndex) {
+    ListView(const List<T>& backing, int fromIndex, int toIndex, bool reversed = false)
+        : backing_(&backing),
+          offset_(fromIndex),
+          length_(toIndex - fromIndex),
+          reversed_(reversed) {
         validate(backing.size(), fromIndex, toIndex);
     }
 
@@ -155,20 +223,20 @@ public:
 
     [[nodiscard]] int size() const override { return length_; }
 
-    T& get(int index) override { return writable().get(offset_ + checkedIndex(index)); }
+    T& get(int index) override { return writable().get(physicalIndex(checkedIndex(index))); }
 
     [[nodiscard]] const T& get(int index) const override {
-        return backing_->get(offset_ + checkedIndex(index));
+        return backing_->get(physicalIndex(checkedIndex(index)));
     }
 
     T set(int index, const T& element) override {
         this->checkNotFrozen();
-        return writable().set(offset_ + checkedIndex(index), element);
+        return writable().set(physicalIndex(checkedIndex(index)), element);
     }
 
     T set(int index, T&& element) override {
         this->checkNotFrozen();
-        return writable().set(offset_ + checkedIndex(index), std::move(element));
+        return writable().set(physicalIndex(checkedIndex(index)), std::move(element));
     }
 
     bool add(const T& element) override { return insertAt(length_, element); }
@@ -183,7 +251,7 @@ public:
 
     T removeAt(int index) override {
         this->checkNotFrozen();
-        T removed = writable().removeAt(offset_ + checkedIndex(index));
+        T removed = writable().removeAt(physicalIndex(checkedIndex(index)));
         --length_;
         return removed;
     }
@@ -200,17 +268,14 @@ public:
 
     void clear() override {
         this->checkNotFrozen();
-        List<T>& target = writable();
-        // Back to front, so that every intermediate removal stays inside the window.
-        for (int remaining = length_; remaining > 0; --remaining) {
-            static_cast<void>(target.removeAt(offset_ + remaining - 1));
+        while (length_ > 0) {
+            static_cast<void>(removeAt(length_ - 1));
         }
-        length_ = 0;
     }
 
     [[nodiscard]] int indexOf(const T& element) const override {
         for (int position = 0; position < length_; ++position) {
-            if (elementEquals(backing_->get(offset_ + position), element)) {
+            if (elementEquals(backing_->get(physicalIndex(position)), element)) {
                 return position;
             }
         }
@@ -218,9 +283,9 @@ public:
     }
 
     [[nodiscard]] int lastIndexOf(const T& element) const override {
-        for (int position = length_; position > 0; --position) {
-            if (elementEquals(backing_->get(offset_ + position - 1), element)) {
-                return position - 1;
+        for (int position = length_ - 1; position >= 0; --position) {
+            if (elementEquals(backing_->get(physicalIndex(position)), element)) {
+                return position;
             }
         }
         return -1;
@@ -235,7 +300,7 @@ public:
         }
         List<T>& target = writable();
         for (std::size_t step = 0; step < incoming.size(); ++step) {
-            target.add(offset_ + position + static_cast<int>(step), incoming[step]);
+            target.add(insertionIndex(position) + static_cast<int>(step), incoming[step]);
         }
         length_ += static_cast<int>(incoming.size());
         return true;
@@ -243,29 +308,27 @@ public:
 
     void sort(const Comparator<T>& comparator) override {
         this->checkNotFrozen();
-        List<T>& target = writable();
         std::vector<T> window;
         window.reserve(static_cast<std::size_t>(length_));
         for (int position = 0; position < length_; ++position) {
-            window.push_back(backing_->get(offset_ + position));
+            window.push_back(get(position));
         }
         std::sort(window.begin(), window.end(), [&comparator](const T& left, const T& right) {
             return comparator.compare(left, right) < 0;
         });
         for (int position = 0; position < length_; ++position) {
-            static_cast<void>(
-                target.set(offset_ + position, window[static_cast<std::size_t>(position)]));
+            static_cast<void>(set(position, window[static_cast<std::size_t>(position)]));
         }
     }
 
     [[nodiscard]] std::unique_ptr<ListView<T>> subList(int fromIndex, int toIndex) override {
         checkSubRange(fromIndex, toIndex);
-        return makeSubWindow(offset_ + fromIndex, offset_ + toIndex);
+        return makeSubWindow(fromIndex, toIndex);
     }
 
     [[nodiscard]] std::unique_ptr<ListView<T>> subList(int fromIndex, int toIndex) const override {
         checkSubRange(fromIndex, toIndex);
-        return std::make_unique<ListView<T>>(*backing_, offset_ + fromIndex, offset_ + toIndex);
+        return makeSubWindow(fromIndex, toIndex);
     }
 
     [[nodiscard]] std::unique_ptr<Iterator<T>> iterator() override {
@@ -302,7 +365,7 @@ public:
             if (cursor_ >= owner_->length_) {
                 throw NoSuchElementException("iterator exhausted");
             }
-            return owner_->backing_->get(owner_->offset_ + cursor_++);
+            return owner_->backing_->get(owner_->physicalIndex(cursor_++));
         }
 
     private:
@@ -326,7 +389,7 @@ public:
                 throw NoSuchElementException("iterator exhausted");
             }
             lastReturned_ = cursor_;
-            return owner_->writable().get(owner_->offset_ + cursor_++);
+            return owner_->writable().get(owner_->physicalIndex(cursor_++));
         }
 
         [[nodiscard]] bool hasPrevious() const override { return cursor_ > 0; }
@@ -337,7 +400,7 @@ public:
                 throw NoSuchElementException("no previous element");
             }
             lastReturned_ = cursor_ - 1;
-            return owner_->writable().get(owner_->offset_ + --cursor_);
+            return owner_->writable().get(owner_->physicalIndex(--cursor_));
         }
 
         [[nodiscard]] int nextIndex() const override { return cursor_; }
@@ -400,7 +463,7 @@ private:
     bool insertAt(int index, U&& element) {
         this->checkNotFrozen();
         const int position = checkedInsertIndex(index);
-        writable().add(offset_ + position, std::forward<U>(element));
+        writable().add(insertionIndex(position), std::forward<U>(element));
         ++length_;
         return true;
     }
@@ -410,10 +473,12 @@ private:
     /// `unmodifiableList(list).subList(a, b)` reads rather than throws, exactly as
     /// Java's wrapper does. The bounds are already relative to this window.
     [[nodiscard]] std::unique_ptr<ListView<T>> makeSubWindow(int fromIndex, int toIndex) const {
+        const int baseFrom = reversed_ ? offset_ + length_ - toIndex : offset_ + fromIndex;
+        const int baseTo = reversed_ ? offset_ + length_ - fromIndex : offset_ + toIndex;
         if (writableBacking_ == nullptr) {
-            return std::make_unique<ListView<T>>(*backing_, fromIndex, toIndex);
+            return std::make_unique<ListView<T>>(*backing_, baseFrom, baseTo, reversed_);
         }
-        return std::make_unique<ListView<T>>(*writableBacking_, fromIndex, toIndex);
+        return std::make_unique<ListView<T>>(*writableBacking_, baseFrom, baseTo, reversed_);
     }
 
     /// The one place a const view is rejected. Everything writable funnels here.
@@ -449,6 +514,14 @@ private:
         return index;
     }
 
+    [[nodiscard]] int physicalIndex(int index) const {
+        return reversed_ ? offset_ + length_ - 1 - index : offset_ + index;
+    }
+
+    [[nodiscard]] int insertionIndex(int index) const {
+        return reversed_ ? offset_ + length_ - index : offset_ + index;
+    }
+
     void checkSubRange(int fromIndex, int toIndex) const { validate(length_, fromIndex, toIndex); }
 
     static void validate(int bound, int fromIndex, int toIndex) {
@@ -464,6 +537,17 @@ private:
     List<T>* writableBacking_ = nullptr;
     int offset_ = 0;
     int length_ = 0;
+    bool reversed_ = false;
 };
+
+template <class T>
+std::unique_ptr<List<T>> List<T>::reversed() {
+    return std::make_unique<ListView<T>>(*this, 0, this->size(), true);
+}
+
+template <class T>
+std::unique_ptr<List<T>> List<T>::reversed() const {
+    return std::make_unique<ListView<T>>(static_cast<const List<T>&>(*this), 0, this->size(), true);
+}
 
 }  // namespace cppstream

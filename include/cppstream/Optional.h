@@ -5,6 +5,8 @@
 #include <cstddef>
 #include <functional>
 #include <optional>
+#include <sstream>
+#include <string>
 #include <type_traits>
 #include <utility>
 
@@ -125,6 +127,17 @@ public:
         return std::invoke(supplier);
     }
 
+    /// Java 9: Optional.or(supplier). The supplier is consulted only when this
+    /// Optional is empty, and must itself produce an Optional. Java's name is a
+    /// C++ keyword, so the method is spelled orGet here (divergence 38).
+    template <class F>
+    [[nodiscard]] Optional orGet(F supplier) const {
+        if (value_) {
+            return *this;
+        }
+        return std::invoke(supplier);
+    }
+
     /// Java 10: Optional.orElseThrow() with no argument.
     [[nodiscard]] const T& orElseThrow() const& { return get(); }
 
@@ -231,6 +244,19 @@ public:
     /// Java: Optional.hashCode(); zero when empty. Requires std::hash<T>.
     [[nodiscard]] std::size_t hashCode() const {
         return value_ ? std::hash<T>{}(*value_) : std::size_t{0};
+    }
+
+    /// Java: Optional.toString(). Empty is "Optional.empty"; present values are
+    /// rendered with operator<<, which is the C++ spelling of Object.toString().
+    template <class U = T>
+        requires requires(std::ostringstream& stream, const U& candidate) { stream << candidate; }
+    [[nodiscard]] std::string toString() const {
+        if (!value_) {
+            return "Optional.empty";
+        }
+        std::ostringstream stream;
+        stream << *value_;
+        return "Optional[" + stream.str() + "]";
     }
 
 private:

@@ -51,6 +51,7 @@ public:
     using valueType = V;
     using Entries = std::map<K, V, Compare>;
     using Entry = Map<K, V>::Entry;
+    using Map<K, V>::remove;
 
     TreeMap() = default;
 
@@ -359,6 +360,11 @@ public:
     [[nodiscard]] TreeMapRangeView<K, V, Compare> descendingMap();
     [[nodiscard]] TreeMapRangeView<K, V, Compare> descendingMap() const;
 
+    /// Java 21: SequencedMap.reversed(). For a sorted map this is the same live,
+    /// reverse-ordered view as descendingMap().
+    [[nodiscard]] TreeMapRangeView<K, V, Compare> reversed() { return descendingMap(); }
+    [[nodiscard]] TreeMapRangeView<K, V, Compare> reversed() const { return descendingMap(); }
+
     /// Java: NavigableMap.navigableKeySet(), the keys as a live NavigableSet view
     /// in this map's order, and descendingKeySet(), the same keys the other way
     /// round. Both walk the map, so remove() takes the mapping with it.
@@ -433,6 +439,7 @@ public:
     using valueType = V;
     using Entries = TreeMap<K, V, Compare>::Entries;
     using Entry = Map<K, V>::Entry;
+    using Map<K, V>::remove;
 
     /// A modifiable view, built by the non-const overloads of subMap/headMap/
     /// tailMap/descendingMap. The fences are always the *ascending* pair; only the
@@ -753,6 +760,10 @@ public:
     [[nodiscard]] TreeMapRangeView descendingMap() const {
         return TreeMapRangeView(*backing_, from_, fromInclusive_, to_, toInclusive_, !descending_);
     }
+
+    /// Java 21: SequencedMap.reversed() on a window.
+    [[nodiscard]] TreeMapRangeView reversed() { return descendingMap(); }
+    [[nodiscard]] TreeMapRangeView reversed() const { return descendingMap(); }
 
     /// Java: NavigableMap.navigableKeySet(), the keys of this window in this view's
     /// order, and descendingKeySet(), the same keys the other way round. Both are

@@ -48,6 +48,14 @@ public:
     /// Java: Collection.toArray(). std::vector is the C++ spelling.
     [[nodiscard]] virtual std::vector<T> toArray() const = 0;
 
+    /// Java: Collection.toArray(T[]). The caller supplies the destination; the
+    /// vector is resized to this collection's size, just as Java fills the array
+    /// from index zero and leaves any surplus slots untouched.
+    std::vector<T>& toArray(std::vector<T>& target) const {
+        target = toArray();
+        return target;
+    }
+
     /// Java: Collection.stream().
     ///
     /// Element values are copied into the stream: the pipeline yields `T` by

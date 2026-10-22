@@ -173,6 +173,51 @@ TEST_CASE("gather composes with the rest of the pipeline") {
           std::vector<std::string>({"seen:1", "seen:12"}));
 }
 
+TEST_CASE("mapConcurrent maps in encounter order and rejects bad concurrency") {
+    const auto values = cppstream::Stream<int>::of({1, 2, 3})
+                            .gather(cppstream::Gatherers::mapConcurrent<int, int>(
+                                4, [](int value) { return value * 10; }))
+                            .toArray();
+
+    CHECK(values == std::vector<int>({10, 20, 30}));
+    CHECK_THROWS_AS(
+        static_cast<void>(cppstream::Gatherers::mapConcurrent<int, int>(
+            0, [](int value) { return value; })),
+        cppstream::IllegalArgumentException);
+}
+
+TEST_CASE("andThen feeds one gatherer's output into the next") {
+    const auto addOne = cppstream::Gatherers::mapConcurrent<int, int>(
+        2, [](int value) { return value + 1; });
+    const auto timesTwo = cppstream::Gatherers::mapConcurrent<int, int>(
+        2, [](int value) { return value * 2; });
+
+    const auto values =
+        cppstream::Stream<int>::of({1, 2, 3}).gather(addOne.andThen(timesTwo)).toArray();
+
+    CHECK(values == std::vector<int>({4, 6, 8}));
+}
+
+TEST_CASE("a gatherer can expose and use its combiner") {
+    const cppstream::Gatherer<int, int, int> summing(
+        [] { return 0; },
+        [](int& state, const int& element, cppstream::Downstream<int>& downstream) {
+            state += element;
+            static_cast<void>(downstream.push(state));
+            return true;
+        },
+        [](int&& left, int&& right) { return left + right; },
+        [](int& state, cppstream::Downstream<int>& downstream) {
+            static_cast<void>(downstream.push(state));
+        });
+
+    CHECK(summing.hasCombiner());
+    CHECK(summing.combine(2, 3) == 5);
+    CHECK_FALSE(cppstream::Gatherers::mapConcurrent<int, int>(
+                    1, [](int value) { return value; })
+                    .hasCombiner());
+}
+
 TEST_CASE("a consumed stream cannot be gathered again") {
     auto stream = cppstream::Stream<int>::of(std::vector<int>{1, 2, 3});
     auto pipeline = std::move(stream).gather(cppstream::Gatherers::windowFixed<int>(2));

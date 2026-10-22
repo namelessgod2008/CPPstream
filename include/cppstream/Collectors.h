@@ -9,6 +9,7 @@
 #include <cppstream/Optional.h>
 #include <cppstream/SummaryStatistics.h>
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
@@ -160,6 +161,66 @@ public:
             {Characteristics::identityFinish});
     }
 
+    /// Java: Collectors.toMap(keyMapper, valueMapper, mergeFunction, mapFactory).
+    /// The factory supplies the concrete map used both as accumulator and result,
+    /// so it can select a TreeMap for sorted groups or a custom HashMap strategy.
+    template <class T, class KF, class VF, class MF, class MFC, class K = MapKeyOf<T, KF>,
+              class U = MapValueOf<T, VF>,
+              class M = std::remove_cvref_t<std::invoke_result_t<MFC&>>>
+    static Collector<T, M, M> toMap(KF keyMapper, VF valueMapper, MF mergeFunction,
+                                    MFC mapFactory) {
+        return Collector<T, M, M>(
+            [mapFactory] { return std::invoke(mapFactory); },
+            [keyMapper, valueMapper, mergeFunction](M& accumulator, T& element) {
+                K key = std::invoke(keyMapper, element);
+                U value = std::invoke(valueMapper, element);
+                const U* existing = accumulator.get(key);
+                if (existing == nullptr) {
+                    accumulator.put(std::move(key), std::move(value));
+                    return;
+                }
+                accumulator.put(key, std::invoke(mergeFunction, *existing, value));
+            },
+            [mergeFunction](M&& left, M&& right) {
+                right.forEach([&left, &mergeFunction](const K& key, U& value) {
+                    const U* existing = left.get(key);
+                    if (existing == nullptr) {
+                        left.put(key, value);
+                    } else {
+                        left.put(key, std::invoke(mergeFunction, *existing, value));
+                    }
+                });
+                return std::move(left);
+            },
+            [](M&& accumulator) { return std::move(accumulator); },
+            {Characteristics::identityFinish});
+    }
+
+    /// Java: Collectors.toConcurrentMap(keyMapper, valueMapper). C++ has no
+    /// ConcurrentMap type; the result is the same HashMap this library uses for
+    /// every other map collector. The parallel collect path still gives each slice
+    /// its own accumulator and merges them in encounter order.
+    template <class T, class KF, class VF, class K = MapKeyOf<T, KF>, class U = MapValueOf<T, VF>>
+    static auto toConcurrentMap(KF keyMapper, VF valueMapper) {
+        return toMap<T>(std::move(keyMapper), std::move(valueMapper));
+    }
+
+    /// Java: Collectors.toConcurrentMap(keyMapper, valueMapper, mergeFunction).
+    template <class T, class KF, class VF, class MF, class K = MapKeyOf<T, KF>,
+              class U = MapValueOf<T, VF>>
+    static auto toConcurrentMap(KF keyMapper, VF valueMapper, MF mergeFunction) {
+        return toMap<T>(std::move(keyMapper), std::move(valueMapper), std::move(mergeFunction));
+    }
+
+    /// Java: Collectors.toConcurrentMap(keyMapper, valueMapper, mergeFunction,
+    /// mapFactory).
+    template <class T, class KF, class VF, class MF, class MFC, class K = MapKeyOf<T, KF>,
+              class U = MapValueOf<T, VF>>
+    static auto toConcurrentMap(KF keyMapper, VF valueMapper, MF mergeFunction, MFC mapFactory) {
+        return toMap<T>(std::move(keyMapper), std::move(valueMapper), std::move(mergeFunction),
+                        std::move(mapFactory));
+    }
+
     /// Java: Collectors.toUnmodifiableMap(keyMapper, valueMapper).
     template <class T, class KF, class VF, class K = MapKeyOf<T, KF>, class U = MapValueOf<T, VF>>
     static Collector<T, HashMap<K, U>, HashMap<K, U>> toUnmodifiableMap(KF keyMapper,
@@ -172,6 +233,34 @@ public:
                     throw IllegalStateException("Duplicate key");
                 }
                 accumulator.put(std::move(key), std::invoke(valueMapper, element));
+            },
+            [](HashMap<K, U>&& left, HashMap<K, U>&& right) {
+                left.putAll(right);
+                return std::move(left);
+            },
+            [](HashMap<K, U>&& accumulator) {
+                accumulator.freeze();
+                return std::move(accumulator);
+            });
+    }
+
+    /// Java: Collectors.toUnmodifiableMap(keyMapper, valueMapper, mergeFunction).
+    template <class T, class KF, class VF, class MF, class K = MapKeyOf<T, KF>,
+              class U = MapValueOf<T, VF>>
+    static Collector<T, HashMap<K, U>, HashMap<K, U>> toUnmodifiableMap(KF keyMapper,
+                                                                        VF valueMapper,
+                                                                        MF mergeFunction) {
+        return Collector<T, HashMap<K, U>, HashMap<K, U>>(
+            [] { return HashMap<K, U>(); },
+            [keyMapper, valueMapper, mergeFunction](HashMap<K, U>& accumulator, T& element) {
+                K key = std::invoke(keyMapper, element);
+                U value = std::invoke(valueMapper, element);
+                const U* existing = accumulator.get(key);
+                if (existing == nullptr) {
+                    accumulator.put(std::move(key), std::move(value));
+                    return;
+                }
+                accumulator.put(key, std::invoke(mergeFunction, *existing, value));
             },
             [](HashMap<K, U>&& left, HashMap<K, U>&& right) {
                 left.putAll(right);
@@ -520,6 +609,24 @@ public:
             downstream.combiner(), downstream.finisher(), downstream.characteristics());
     }
 
+    /// Java: Collectors.collectingAndThen(downstream, finisher). The downstream
+    /// finisher runs first, then the extra function transforms its result.
+    template <class D, class F, class T = typename D::elementType,
+              class R = std::remove_cvref_t<std::invoke_result_t<F&, typename D::resultType>>>
+    static Collector<T, typename D::accumulatorType, R> collectingAndThen(const D& downstream,
+                                                                            F finisher) {
+        std::vector<Characteristics> characteristics = downstream.characteristics();
+        std::erase(characteristics, Characteristics::identityFinish);
+        return Collector<T, typename D::accumulatorType, R>(
+            downstream.supplier(), downstream.accumulator(), downstream.combiner(),
+            [downstream, finisher](typename D::accumulatorType&& accumulator) -> R {
+                return std::invoke(
+                    finisher,
+                    std::invoke(downstream.finisher(), std::move(accumulator)));
+            },
+            std::move(characteristics));
+    }
+
     /// Java 12: Collectors.teeing(first, second, merger).
     template <class T, class D1, class D2, class M>
     static Collector<T, std::pair<typename D1::accumulatorType, typename D2::accumulatorType>,
@@ -609,8 +716,68 @@ public:
             });
     }
 
-    /// Java: Collectors.groupingBy(classifier, mapFactory, downstream) is not
-    /// provided yet; HashMap is the only map factory this version ships.
+    /// Java: Collectors.groupingBy(classifier, mapFactory, downstream). The
+    /// factory selects the result map type; groups are still accumulated in a
+    /// std::unordered_map and inserted through Map::put during the finisher.
+    template <class T, class F, class MF, class D, class K = MapKeyOf<T, F>,
+              class A = typename D::accumulatorType, class R = typename D::resultType,
+              class M = std::remove_cvref_t<std::invoke_result_t<MF&>>>
+    static Collector<T, std::unordered_map<K, A>, M>
+    groupingBy(F classifier, MF mapFactory, const D& downstream) {
+        using Accumulator = std::unordered_map<K, A>;
+        return Collector<T, Accumulator, M>(
+            [] { return Accumulator(); },
+            [classifier, downstream](Accumulator& accumulator, T& element) {
+                K key = std::invoke(classifier, element);
+                auto position = accumulator.find(key);
+                if (position == accumulator.end()) {
+                    position = accumulator.emplace(key, std::invoke(downstream.supplier())).first;
+                }
+                std::invoke(downstream.accumulator(), position->second, element);
+            },
+            [downstream](Accumulator&& left, Accumulator&& right) {
+                for (auto& entry : right) {
+                    auto position = left.find(entry.first);
+                    if (position == left.end()) {
+                        left.emplace(std::move(entry.first), std::move(entry.second));
+                    } else {
+                        position->second =
+                            std::invoke(downstream.combiner(), std::move(position->second),
+                                        std::move(entry.second));
+                    }
+                }
+                return std::move(left);
+            },
+            [downstream, mapFactory](Accumulator&& accumulator) {
+                M finished = std::invoke(mapFactory);
+                for (auto& entry : accumulator) {
+                    finished.put(entry.first,
+                                 std::invoke(downstream.finisher(), std::move(entry.second)));
+                }
+                return finished;
+            });
+    }
+
+    /// Java: Collectors.groupingByConcurrent(classifier).
+    template <class T, class F, class K = MapKeyOf<T, F>>
+    static auto groupingByConcurrent(F classifier) {
+        return groupingBy<T>(std::move(classifier));
+    }
+
+    /// Java: Collectors.groupingByConcurrent(classifier, downstream).
+    template <class T, class F, class D, class K = MapKeyOf<T, F>>
+    static auto groupingByConcurrent(F classifier, const D& downstream) {
+        return groupingBy<T>(std::move(classifier), downstream);
+    }
+
+    /// Java: Collectors.groupingByConcurrent(classifier, mapFactory, downstream).
+    template <class T, class F, class MF, class D, class K = MapKeyOf<T, F>,
+              class A = typename D::accumulatorType, class R = typename D::resultType,
+              class M = std::remove_cvref_t<std::invoke_result_t<MF&>>>
+    static auto groupingByConcurrent(F classifier, MF mapFactory, const D& downstream) {
+        return groupingBy<T>(std::move(classifier), std::move(mapFactory), downstream);
+    }
+
     template <class T, class P>
     static Collector<T, std::unordered_map<bool, ArrayList<T>>, HashMap<bool, ArrayList<T>>>
     partitioningBy(P predicate) {

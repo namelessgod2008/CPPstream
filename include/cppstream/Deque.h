@@ -2,10 +2,16 @@
 
 #include <cppstream/Queue.h>
 
+#include <algorithm>
+#include <cstddef>
 #include <memory>
 #include <utility>
+#include <vector>
 
 namespace cppstream {
+
+template <class T>
+class ReversedDequeView;
 
 /// A port of java.util.Deque.
 ///
@@ -92,6 +98,160 @@ public:
 
     /// Java: Deque.descendingIterator(), from tail to head.
     [[nodiscard]] virtual std::unique_ptr<Iterator<T>> descendingIterator() = 0;
+
+    /// Java 21: SequencedCollection.reversed(), a live view in reverse order.
+    /// Returned by pointer for the same reason as List::reversed(): it is a view,
+    /// not a value.
+    [[nodiscard]] std::unique_ptr<Deque<T>> reversed();
+    [[nodiscard]] std::unique_ptr<Deque<T>> reversed() const;
 };
+
+/// The live reverse view behind Deque::reversed().
+///
+/// Every operation is mirrored onto the backing deque: the view's first is the
+/// backing's last, the view's addFirst appends to the backing, and so on. The
+/// read-only form is built by the const overload of reversed() and rejects every
+/// mutator, just as ListView does.
+template <class T>
+class ReversedDequeView final : public Deque<T> {
+public:
+    using Deque<T>::add;
+    using Deque<T>::remove;
+
+    explicit ReversedDequeView(Deque<T>& backing)
+        : backing_(&backing), writableBacking_(&backing) {}
+
+    explicit ReversedDequeView(const Deque<T>& backing) : backing_(&backing) {}
+
+    [[nodiscard]] int size() const override { return backing_->size(); }
+
+    [[nodiscard]] int modCount() const noexcept override { return backing_->modCount(); }
+
+    bool add(const T& element) override {
+        writable().addFirst(element);
+        return true;
+    }
+
+    bool add(T&& element) override {
+        writable().addFirst(std::move(element));
+        return true;
+    }
+
+    bool remove(const T& element) override {
+        return writable().removeLastOccurrence(element);
+    }
+
+    bool offer(const T& element) override { return add(element); }
+    bool offer(T&& element) override { return add(std::move(element)); }
+
+    [[nodiscard]] T remove() override { return removeFirst(); }
+    [[nodiscard]] Optional<T> poll() override { return pollFirst(); }
+    [[nodiscard]] const T& element() const override { return getFirst(); }
+    [[nodiscard]] Optional<T> peek() const override { return peekFirst(); }
+
+    void addFirst(const T& element) override { writable().addLast(element); }
+    void addFirst(T&& element) override { writable().addLast(std::move(element)); }
+    void addLast(const T& element) override { static_cast<void>(add(element)); }
+    void addLast(T&& element) override { static_cast<void>(add(std::move(element))); }
+
+    [[nodiscard]] bool offerFirst(const T& element) override {
+        return writable().offerLast(element);
+    }
+    [[nodiscard]] bool offerFirst(T&& element) override {
+        return writable().offerLast(std::move(element));
+    }
+    [[nodiscard]] bool offerLast(const T& element) override { return add(element); }
+    [[nodiscard]] bool offerLast(T&& element) override { return add(std::move(element)); }
+
+    [[nodiscard]] T removeFirst() override { return writable().removeLast(); }
+    [[nodiscard]] T removeLast() override { return writable().removeFirst(); }
+    [[nodiscard]] Optional<T> pollFirst() override { return writable().pollLast(); }
+    [[nodiscard]] Optional<T> pollLast() override { return writable().pollFirst(); }
+
+    [[nodiscard]] bool removeFirstOccurrence(const T& element) override {
+        return writable().removeLastOccurrence(element);
+    }
+    [[nodiscard]] bool removeLastOccurrence(const T& element) override {
+        return writable().removeFirstOccurrence(element);
+    }
+
+    [[nodiscard]] const T& getFirst() const override { return backing_->getLast(); }
+    [[nodiscard]] const T& getLast() const override { return backing_->getFirst(); }
+    [[nodiscard]] Optional<T> peekFirst() const override { return backing_->peekLast(); }
+    [[nodiscard]] Optional<T> peekLast() const override { return backing_->peekFirst(); }
+
+    void push(const T& element) override { addFirst(element); }
+    void push(T&& element) override { addFirst(std::move(element)); }
+    [[nodiscard]] T pop() override { return removeFirst(); }
+
+    [[nodiscard]] std::unique_ptr<Iterator<T>> iterator() override {
+        return writable().descendingIterator();
+    }
+
+    [[nodiscard]] std::unique_ptr<Iterator<const T>> constIterator() const override {
+        std::vector<T> snapshot;
+        snapshot.reserve(static_cast<std::size_t>(backing_->size()));
+        std::unique_ptr<Iterator<const T>> source = backing_->constIterator();
+        while (source->hasNext()) {
+            snapshot.push_back(source->next());
+        }
+        std::reverse(snapshot.begin(), snapshot.end());
+        return std::make_unique<ReversedDequeConstIterator>(this, std::move(snapshot),
+                                                            backing_->modCount());
+    }
+
+    [[nodiscard]] std::unique_ptr<Iterator<T>> descendingIterator() override {
+        return writable().iterator();
+    }
+
+    class ReversedDequeConstIterator final : public Iterator<const T> {
+    public:
+        ReversedDequeConstIterator(const ReversedDequeView* owner, std::vector<T> values,
+                                   int expectedModCount)
+            : owner_(owner), values_(std::move(values)), expectedModCount_(expectedModCount) {}
+
+        [[nodiscard]] bool hasNext() const override { return position_ < values_.size(); }
+
+        const T& next() override {
+            if (owner_->backing_->modCount() != expectedModCount_) {
+                throw ConcurrentModificationException(
+                    "backing deque modified during iteration");
+            }
+            if (position_ >= values_.size()) {
+                throw NoSuchElementException("iterator exhausted");
+            }
+            return values_[position_++];
+        }
+
+    private:
+        const ReversedDequeView* owner_;
+        std::vector<T> values_;
+        std::size_t position_ = 0;
+        int expectedModCount_;
+    };
+
+private:
+    [[nodiscard]] Deque<T>& writable() const {
+        this->checkNotFrozen();
+        if (writableBacking_ == nullptr) {
+            throw UnsupportedOperationException(
+                "this deque view is read-only: it was taken from a const deque");
+        }
+        return *writableBacking_;
+    }
+
+    const Deque<T>* backing_;
+    Deque<T>* writableBacking_ = nullptr;
+};
+
+template <class T>
+std::unique_ptr<Deque<T>> Deque<T>::reversed() {
+    return std::make_unique<ReversedDequeView<T>>(*this);
+}
+
+template <class T>
+std::unique_ptr<Deque<T>> Deque<T>::reversed() const {
+    return std::make_unique<ReversedDequeView<T>>(static_cast<const Deque<T>&>(*this));
+}
 
 }  // namespace cppstream

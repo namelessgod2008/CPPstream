@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cppstream/AbstractSet.h>
+#include <cppstream/Comparator.h>
 #include <cppstream/Elements.h>
 #include <cppstream/Optional.h>
 
@@ -9,6 +10,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -90,6 +92,30 @@ public:
             return elementHash(key_) ^ elementHash(value_);
         }
 
+        /// Java: Map.Entry.comparingByKey().
+        [[nodiscard]] static Comparator<Entry> comparingByKey() {
+            return comparingByKey(Comparator<K>::naturalOrder());
+        }
+
+        /// Java: Map.Entry.comparingByKey(comparator).
+        [[nodiscard]] static Comparator<Entry> comparingByKey(const Comparator<K>& comparator) {
+            return Comparator<Entry>([comparator](const Entry& left, const Entry& right) {
+                return comparator.compare(left.getKey(), right.getKey());
+            });
+        }
+
+        /// Java: Map.Entry.comparingByValue().
+        [[nodiscard]] static Comparator<Entry> comparingByValue() {
+            return comparingByValue(Comparator<V>::naturalOrder());
+        }
+
+        /// Java: Map.Entry.comparingByValue(comparator).
+        [[nodiscard]] static Comparator<Entry> comparingByValue(const Comparator<V>& comparator) {
+            return Comparator<Entry>([comparator](const Entry& left, const Entry& right) {
+                return comparator.compare(left.getValue(), right.getValue());
+            });
+        }
+
     private:
         K key_;
         V value_;
@@ -131,6 +157,18 @@ public:
     /// Java: Map.remove(key).
     [[nodiscard]] virtual Optional<V> remove(const K& key) = 0;
 
+    /// Java: Map.remove(key, value). Removes the mapping only when it currently
+    /// holds an equal value.
+    [[nodiscard]] virtual bool remove(const K& key, const V& value) {
+        checkNotFrozen();
+        const V* current = get(key);
+        if (current == nullptr || !elementEquals(*current, value)) {
+            return false;
+        }
+        static_cast<void>(remove(key));
+        return true;
+    }
+
     virtual void clear() = 0;
 
     /// Java: Map.computeIfAbsent(key, mappingFunction).
@@ -144,6 +182,60 @@ public:
     /// Java: Map.computeIfPresent(key, remappingFunction). Empty removes the entry.
     [[nodiscard]] virtual Optional<V> computeIfPresent(
         const K& key, const std::function<Optional<V>(const K&, const V&)>& remappingFunction) = 0;
+
+    /// Java: Map.compute(key, remappingFunction). The function receives the
+    /// current value as a pointer, or nullptr when the key is absent; an empty
+    /// result removes the mapping. This is the one Map callback that can install a
+    /// mapping for an absent key.
+    [[nodiscard]] virtual Optional<V> compute(
+        const K& key,
+        const std::function<Optional<V>(const K&, const V*)>& remappingFunction) {
+        checkNotFrozen();
+        const V* current = get(key);
+        Optional<V> computed = std::invoke(remappingFunction, key, current);
+        if (computed.isEmpty() || isNullValue(computed.get())) {
+            static_cast<void>(remove(key));
+            return Optional<V>::empty();
+        }
+        V replacement = std::move(computed).get();
+        Optional<V> result = Optional<V>::of(replacement);
+        static_cast<void>(put(key, std::move(replacement)));
+        return result;
+    }
+
+    /// Java: Map.replace(key, value). Does nothing when the key is absent.
+    [[nodiscard]] virtual Optional<V> replace(const K& key, const V& value) {
+        checkNotFrozen();
+        requireNonNullValue(value);
+        if (get(key) == nullptr) {
+            return Optional<V>::empty();
+        }
+        return put(key, value);
+    }
+
+    /// Java: Map.replace(key, oldValue, newValue).
+    [[nodiscard]] virtual bool replace(const K& key, const V& oldValue, const V& newValue) {
+        checkNotFrozen();
+        requireNonNullValue(newValue);
+        const V* current = get(key);
+        if (current == nullptr || !elementEquals(*current, oldValue)) {
+            return false;
+        }
+        static_cast<void>(put(key, newValue));
+        return true;
+    }
+
+    /// Java: Map.replaceAll(function). The function receives the key and a
+    /// mutable value reference, matching Java's reference semantics.
+    template <class F>
+    void replaceAll(F function) {
+        checkNotFrozen();
+        visitEntries([&function](const K& key, V& value) {
+            V replacement = std::invoke(function, key, value);
+            requireNonNullValue(replacement);
+            value = std::move(replacement);
+        });
+    }
 
     /// Java: Map.merge(key, value, remappingFunction). Empty removes the entry.
     [[nodiscard]] virtual Optional<V> merge(
@@ -236,6 +328,23 @@ public:
     }
 
 protected:
+    /// Java's null check for pointer-typed values: other value types have no null
+    /// to reject.
+    static void requireNonNullValue(const V& value) {
+        if constexpr (std::is_pointer_v<V>) {
+            if (value == nullptr) {
+                throw NullPointerException("value");
+            }
+        }
+    }
+
+    static bool isNullValue(const V& value) {
+        if constexpr (std::is_pointer_v<V>) {
+            return value == nullptr;
+        }
+        return false;
+    }
+
     /// Bumped by the concrete maps whenever the number of mappings changes. See
     /// modCount() above.
     void bumpModCount() noexcept { ++modCount_; }

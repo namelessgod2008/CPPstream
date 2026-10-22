@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <functional>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -150,4 +151,40 @@ TEST_CASE("nullsFirst and nullsLast order the null pointer explicitly") {
     CHECK(nullsLast.compare(pointerToOne, nullptr) < 0);
     CHECK(nullsLast.compare(nullptr, nullptr) == 0);
     CHECK(nullsLast.compare(pointerToOne, pointerToTwo) < 0);
+}
+
+TEST_CASE("comparingInt, comparingLong and comparingDouble use primitive order") {
+    const auto byAge = cppstream::Comparator<Person>::comparingInt(
+        [](const Person& person) { return person.age; });
+    CHECK(byAge.compare(Person{"a", 20}, Person{"b", 30}) < 0);
+
+    const auto byAgeLong = cppstream::Comparator<Person>::comparingLong(
+        [](const Person& person) { return person.age; });
+    CHECK(byAgeLong.compare(Person{"a", 30}, Person{"b", 20}) > 0);
+
+    const auto byScore = cppstream::Comparator<Person>::comparingDouble(
+        [](const Person& person) { return static_cast<double>(person.age) + 0.5; });
+    CHECK(byScore.compare(Person{"a", 20}, Person{"b", 30}) < 0);
+
+    const double nan = std::numeric_limits<double>::quiet_NaN();
+    const auto numbers = cppstream::Comparator<double>::comparingDouble(
+        [](double value) { return value; });
+    CHECK(numbers.compare(nan, 1.0) > 0);
+    CHECK(numbers.compare(1.0, nan) < 0);
+    CHECK(numbers.compare(nan, nan) == 0);
+    CHECK(numbers.compare(-0.0, 0.0) < 0);
+    CHECK(numbers.compare(0.0, -0.0) > 0);
+}
+
+TEST_CASE("thenComparingInt and thenComparingDouble break ties") {
+    const auto byName =
+        cppstream::Comparator<Person>::comparing([](const Person& person) { return person.name; });
+
+    const auto nameThenAge = byName.thenComparingInt(
+        [](const Person& person) { return person.age; });
+    CHECK(nameThenAge.compare(Person{"alice", 20}, Person{"alice", 30}) < 0);
+
+    const auto nameThenScore = byName.thenComparingDouble(
+        [](const Person& person) { return static_cast<double>(person.age); });
+    CHECK(nameThenScore.compare(Person{"alice", 30}, Person{"alice", 20}) > 0);
 }

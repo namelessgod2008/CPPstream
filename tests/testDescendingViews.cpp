@@ -181,6 +181,14 @@ TEST_CASE("descendingSet on a container and on a view hand out views, not copies
     CHECK(listIs(descending.descendingSet().toArray(), {5, 10, 20, 25, 30}));
 }
 
+TEST_CASE("reversed is the SequencedCollection spelling of descendingSet") {
+    IntSet values{10, 20, 30};
+
+    CHECK(listIs(values.reversed().toArray(), {30, 20, 10}));
+    CHECK(listIs(values.reversed().reversed().toArray(), {10, 20, 30}));
+    CHECK(listIs(values.subSet(10, 30).reversed().toArray(), {20, 10}));
+}
+
 TEST_CASE("a descending set view fails fast when the tree changes underneath it") {
     IntSet values{10, 20, 30};
     auto descending = values.descendingSet();
@@ -328,6 +336,13 @@ TEST_CASE("descendingMap is a view, and its fence rules match the JDK") {
     CHECK(rejection([&] { return window.subMap(20, true, 40, false); }) == "fromKey > toKey");
     CHECK(listIs(keysOf(window.headMap(30, true)), {30}));
     CHECK(listIs(keysOf(window.tailMap(30, true)), {30, 25, 20}));
+}
+
+TEST_CASE("reversed is the SequencedMap spelling of descendingMap") {
+    IntMap values{{1, "one"}, {2, "two"}, {3, "three"}};
+
+    CHECK(keysOf(values.reversed()) == std::vector<int>{3, 2, 1});
+    CHECK(keysOf(values.reversed().reversed()) == std::vector<int>{1, 2, 3});
 }
 
 TEST_CASE("descendingMap flips the inherited key, value and entry views") {

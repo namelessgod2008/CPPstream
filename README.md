@@ -9,14 +9,14 @@
 整套东西都是现成的文件，加进来就能用，不需要单独编译。
 
 想看得更深，请翻 [DESIGN.md](DESIGN.md)。那本手册记得更细：每一处和 Java 不一样的地方、
-为什么这样定、哪些细节是拿真的 Java 一条条比对的，以及接下来打算做什么。
+为什么这样定、哪些细节是拿真的 Java 一条条比对的，以及哪些 API 还没做。
 
 改写之前那份术语更多、更"专业"的旧版说明，我们原样留了一份，放在
 [`professionalreadme/README.md`](professionalreadme/README.md)，需要查旧措辞时去那里看。
 
 ## 状态
 
-已经全部做完，也全都测过了：**245 个测试用例、1508 条断言**，在最严格的一整套检查下都
+主要功能都做完了，也全都测过了：**245 个测试用例、1508 条断言**，在最严格的一整套检查下都
 通过；另外还有 5 个"故意写错、看它拦不拦得住"的用例。整套东西由 34 个文件组成，配上 25 个
 测试和示例文件，用检查工具扫过一遍，一处警告都没有。
 
@@ -36,7 +36,8 @@
 - **拿真的比对过**：有些细节 Java 自己都写得含糊，我们没拍脑袋，而是把真的 Java 跑一遍照着抄，
   这些对照就放在 `tests/jdk/`。
 
-还差一样没做：`mapConcurrent`。就直说放在这里，不藏着。
+还有一小批不常用的口子没开：自己拼流的 `builder`、把流当迭代器用、关闭钩子、少数收集器和
+集合便利方法；`mapConcurrent` 也在其中。完整清单写在 DESIGN.md 的 §7.11，没有藏着。
 
 ### 快速浏览
 
@@ -196,7 +197,7 @@ include and use -- there is nothing separate to compile.
 
 For the deeper story, read [DESIGN.md](DESIGN.md). That manual records every
 place we differ from Java and why, which details were checked one by one against
-the real Java, and what we plan to do next.
+the real Java, and which APIs are not there yet.
 
 The older, more technical write-up (the version from before this plain-language
 rewrite) is kept as-is in
@@ -205,7 +206,7 @@ original wording.
 
 ## Status
 
-All done and well tested: **245 test cases, 1508 checks**, passing under the
+The main features are done and well tested: **245 test cases, 1508 checks**, passing under the
 strictest checking modes, plus 5 cases that are deliberately written wrong to
 prove the tool catches them. It is 34 files, with 25 test and example files, and a
 sweep with the checking tools found not one warning.
@@ -233,8 +234,10 @@ What it can do for you:
   not guess -- we ran the real Java and copied what it does. Those comparisons sit
   under `tests/jdk/`.
 
-One thing is still deliberately missing: `mapConcurrent`. It is written down here
-rather than hidden.
+A small batch of less-common openings is still missing: building a stream by
+hand, using a stream as an iterator, close hooks, a few collectors and collection
+conveniences -- `mapConcurrent` among them. The full list is in DESIGN.md
+section 7.11, written down rather than hidden.
 
 ### Quick look
 

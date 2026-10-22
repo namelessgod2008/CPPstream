@@ -303,3 +303,49 @@ TEST_CASE("a container stream is lazy and fails fast if the container changes") 
     auto fresh = values.stream();
     CHECK(std::move(fresh).count() == 4);
 }
+
+TEST_CASE("List replaceAll and the Java 21 sequenced methods") {
+    cppstream::ArrayList<int> values{1, 2, 3};
+    cppstream::List<int>& list = values;
+
+    list.replaceAll([](int value) { return value * 10; });
+    CHECK(sameValues(values.toArray(), {10, 20, 30}));
+
+    list.addFirst(0);
+    list.addLast(40);
+    CHECK(list.getFirst() == 0);
+    CHECK(list.getLast() == 40);
+    CHECK(list.removeFirst() == 0);
+    CHECK(list.removeLast() == 40);
+    CHECK(sameValues(values.toArray(), {10, 20, 30}));
+
+    CHECK_THROWS_AS(cppstream::ArrayList<int>{}.getFirst(), cppstream::NoSuchElementException);
+}
+
+TEST_CASE("List reversed is a live view in the opposite direction") {
+    cppstream::ArrayList<int> values{1, 2, 3};
+
+    auto reversed = values.reversed();
+    CHECK(reversed->size() == 3);
+    CHECK(reversed->get(0) == 3);
+
+    reversed->set(0, 30);
+    CHECK(values.get(2) == 30);
+
+    reversed->add(0, 40);
+    CHECK(values.toArray() == std::vector<int>({1, 2, 30, 40}));
+    CHECK(reversed->toArray() == std::vector<int>({40, 30, 2, 1}));
+
+    auto forwards = reversed->reversed();
+    CHECK(forwards->toArray() == std::vector<int>({1, 2, 30, 40}));
+}
+
+TEST_CASE("Collection.toArray can fill a caller-provided vector") {
+    const cppstream::ArrayList<int> values{1, 2, 3};
+    std::vector<int> target{9, 9, 9, 9};
+
+    const std::vector<int>& returned = values.toArray(target);
+
+    CHECK(&returned == &target);
+    CHECK(target == std::vector<int>({1, 2, 3}));
+}

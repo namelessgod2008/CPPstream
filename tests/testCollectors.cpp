@@ -307,3 +307,66 @@ TEST_CASE("container streams flow through the whole collector vocabulary") {
     CHECK(doubled.size() == 3);
     CHECK(doubled.contains(6));
 }
+
+TEST_CASE("collectingAndThen transforms a downstream result") {
+    const int wordsCount = cppstream::Stream<std::string>::of(words()).collect(
+        cppstream::Collectors::collectingAndThen(
+            cppstream::Collectors::toList<std::string>(),
+            [](cppstream::ArrayList<std::string> list) { return list.size(); }));
+
+    CHECK(wordsCount == 5);
+}
+
+TEST_CASE("the four-argument toMap accepts a map factory") {
+    const cppstream::TreeMap<int, std::string> lengths =
+        cppstream::Stream<std::string>::of(words()).collect(
+            cppstream::Collectors::toMap<std::string>(
+                [](const std::string& word) { return static_cast<int>(word.size()); },
+                [](const std::string& word) { return word; },
+                [](const std::string& left, const std::string& right) {
+                    return left + "|" + right;
+                },
+                [] { return cppstream::TreeMap<int, std::string>(); }));
+
+    CHECK(lengths.size() == 4);
+    CHECK(lengths.firstKey() == 1);
+    CHECK(lengths.lastKey() == 5);
+    CHECK(lengths.get(2)->find('|') != std::string::npos);
+}
+
+TEST_CASE("toUnmodifiableMap supports a merge function") {
+    cppstream::HashMap<int, int> counts =
+        cppstream::Stream<std::string>::of(words()).collect(
+            cppstream::Collectors::toUnmodifiableMap<std::string>(
+                [](const std::string& word) { return static_cast<int>(word.size()); },
+                [](const std::string&) { return 1; },
+                [](int left, int right) { return left + right; }));
+
+    CHECK(counts.isFrozen());
+    CHECK(*counts.get(2) == 2);
+    CHECK_THROWS_AS(counts.put(9, 1), cppstream::UnsupportedOperationException);
+}
+
+TEST_CASE("groupingBy with a map factory and the concurrent spellings") {
+    const auto grouped = cppstream::Stream<std::string>::of(words()).collect(
+        cppstream::Collectors::groupingBy<std::string>(
+            [](const std::string& word) { return static_cast<int>(word.size()); },
+            [] { return cppstream::TreeMap<int, cppstream::ArrayList<std::string>>(); },
+            cppstream::Collectors::toList<std::string>()));
+
+    CHECK(grouped.firstKey() == 1);
+    CHECK(grouped.lastKey() == 5);
+    CHECK(grouped.get(2)->size() == 2);
+
+    const auto concurrent = cppstream::Stream<std::string>::of(words()).collect(
+        cppstream::Collectors::groupingByConcurrent<std::string>(
+            [](const std::string& word) { return static_cast<int>(word.size()); },
+            cppstream::Collectors::toList<std::string>()));
+    CHECK(concurrent.size() == 4);
+
+    const auto concurrentMap = cppstream::Stream<std::string>::of(words()).collect(
+        cppstream::Collectors::toConcurrentMap<std::string>(
+            [](const std::string& word) { return word; },
+            [](const std::string& word) { return static_cast<int>(word.size()); }));
+    CHECK(concurrentMap.size() == 5);
+}

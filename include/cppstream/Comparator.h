@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cmath>
+#include <cstdint>
 #include <functional>
 #include <type_traits>
 #include <utility>
@@ -78,6 +80,33 @@ public:
         });
     }
 
+    /// Java: Comparator.thenComparingInt(keyExtractor).
+    template <class F>
+    [[nodiscard]] Comparator thenComparingInt(F keyExtractor) const {
+        return thenComparing(std::move(keyExtractor), Comparator<int>([](int left, int right) {
+            return compareValues(left, right);
+        }));
+    }
+
+    /// Java: Comparator.thenComparingLong(keyExtractor).
+    template <class F>
+    [[nodiscard]] Comparator thenComparingLong(F keyExtractor) const {
+        return thenComparing(std::move(keyExtractor), Comparator<std::int64_t>(
+                                                           [](std::int64_t left, std::int64_t right) {
+                                                               return compareValues(left, right);
+                                                           }));
+    }
+
+    /// Java: Comparator.thenComparingDouble(keyExtractor), including Java's
+    /// Double.compare ordering for NaN.
+    template <class F>
+    [[nodiscard]] Comparator thenComparingDouble(F keyExtractor) const {
+        return thenComparing(std::move(keyExtractor),
+                             Comparator<double>([](double left, double right) {
+                                 return compareDoubles(left, right);
+                             }));
+    }
+
     // --- Factories ---------------------------------------------------------
 
     /// Java: Comparator.naturalOrder(). Defined via operator< rather than
@@ -115,6 +144,33 @@ public:
             });
     }
 
+    /// Java: Comparator.comparingInt(keyExtractor).
+    template <class F>
+    static Comparator comparingInt(F keyExtractor) {
+        return Comparator([keyExtractor = std::move(keyExtractor)](const T& left, const T& right) {
+            return compareValues(static_cast<int>(std::invoke(keyExtractor, left)),
+                                 static_cast<int>(std::invoke(keyExtractor, right)));
+        });
+    }
+
+    /// Java: Comparator.comparingLong(keyExtractor).
+    template <class F>
+    static Comparator comparingLong(F keyExtractor) {
+        return Comparator([keyExtractor = std::move(keyExtractor)](const T& left, const T& right) {
+            return compareValues(static_cast<std::int64_t>(std::invoke(keyExtractor, left)),
+                                 static_cast<std::int64_t>(std::invoke(keyExtractor, right)));
+        });
+    }
+
+    /// Java: Comparator.comparingDouble(keyExtractor).
+    template <class F>
+    static Comparator comparingDouble(F keyExtractor) {
+        return Comparator([keyExtractor = std::move(keyExtractor)](const T& left, const T& right) {
+            return compareDoubles(static_cast<double>(std::invoke(keyExtractor, left)),
+                                  static_cast<double>(std::invoke(keyExtractor, right)));
+        });
+    }
+
     /// Java: Comparator.nullsFirst(comparator). Only meaningful for pointer
     /// payloads, which are the only place C++ can spell "null".
     static Comparator nullsFirst(Comparator comparator)
@@ -147,6 +203,38 @@ public:
     }
 
 private:
+    template <class U>
+    static int compareValues(const U& left, const U& right) {
+        if (left < right) {
+            return -1;
+        }
+        if (right < left) {
+            return 1;
+        }
+        return 0;
+    }
+
+    /// Java: Double.compare. NaN compares greater than every number and equal to
+    /// another NaN, with -0.0 less than +0.0.
+    static int compareDoubles(double left, double right) {
+        if (std::isnan(left)) {
+            return std::isnan(right) ? 0 : 1;
+        }
+        if (std::isnan(right)) {
+            return -1;
+        }
+        if (left < right) {
+            return -1;
+        }
+        if (left > right) {
+            return 1;
+        }
+        if (left == right) {
+            return std::signbit(left) == std::signbit(right) ? 0 : (std::signbit(left) ? -1 : 1);
+        }
+        return 0;
+    }
+
     CompareFn compareFn_;
 };
 

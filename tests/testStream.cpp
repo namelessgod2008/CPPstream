@@ -196,6 +196,72 @@ TEST_CASE("findAny returns the first element and keeps encounter order") {
     CHECK(values.parallelStream().findAny().get() == 9);
 }
 
+TEST_CASE("Stream.builder collects values and is single-use") {
+    auto builder = cppstream::Stream<int>::builder();
+    builder.add(1).add(2);
+    builder.accept(3);
+
+    const std::vector<int> values = builder.build().toArray();
+    CHECK(values == std::vector<int>({1, 2, 3}));
+
+    CHECK_THROWS_AS(builder.add(4), cppstream::IllegalStateException);
+    CHECK_THROWS_AS(static_cast<void>(builder.build()), cppstream::IllegalStateException);
+}
+
+TEST_CASE("Stream.iterator exposes the remaining elements exactly once") {
+    auto iterator = cppstream::Stream<int>::of({1, 2}).iterator();
+
+    REQUIRE(iterator->hasNext());
+    CHECK(iterator->next() == 1);
+    REQUIRE(iterator->hasNext());
+    CHECK(iterator->next() == 2);
+    CHECK_FALSE(iterator->hasNext());
+    CHECK_THROWS_AS(static_cast<void>(iterator->next()), cppstream::NoSuchElementException);
+}
+
+TEST_CASE("onClose handlers travel with the pipeline and run once") {
+    int first = 0;
+    int second = 0;
+
+    auto pipeline = cppstream::Stream<int>::of({1, 2})
+                        .onClose([&first] { ++first; })
+                        .map([](int value) { return value + 1; })
+                        .onClose([&second] { ++second; });
+
+    pipeline.close();
+    pipeline.close();
+
+    CHECK(first == 1);
+    CHECK(second == 1);
+}
+
+TEST_CASE("toArray accepts a generator for the destination vector") {
+    const std::vector<int> values =
+        cppstream::Stream<int>::of({1, 2, 3}).toArray([](std::size_t expected) {
+            std::vector<int> buffer;
+            buffer.reserve(expected);
+            return buffer;
+        });
+
+    CHECK(values == std::vector<int>({1, 2, 3}));
+}
+
+TEST_CASE("three-argument reduce and collect use their combiner") {
+    const int reduced = cppstream::Stream<int>::range(1, 6).parallel().reduce(
+        0, [](int total, int value) { return total + value; },
+        [](int left, int right) { return left + right; });
+    CHECK(reduced == 15);
+
+    const auto collected = cppstream::Stream<int>::range(1, 6).parallel().collect(
+        [] { return cppstream::ArrayList<int>(); },
+        [](cppstream::ArrayList<int>& accumulator, int& value) { accumulator.add(value); },
+        [](cppstream::ArrayList<int>&& left, cppstream::ArrayList<int>&& right) {
+            left.addAll(right);
+            return std::move(left);
+        });
+    CHECK(collected.toArray() == std::vector<int>({1, 2, 3, 4, 5}));
+}
+
 TEST_CASE("anyMatch short-circuits an infinite stream") {
     int generated = 0;
 

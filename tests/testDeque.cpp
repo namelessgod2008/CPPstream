@@ -109,6 +109,45 @@ TEST_CASE("ArrayDeque iterates forwards and backwards") {
     CHECK(values.stream().reversed().toList().toArray() == std::vector<int>{3, 2, 1});
 }
 
+TEST_CASE("Deque.reversed is a live backwards window") {
+    cppstream::ArrayDeque<int> values{1, 2, 3, 4};
+    auto reversed = values.reversed();
+
+    CHECK(reversed->toArray() == std::vector<int>{4, 3, 2, 1});
+    CHECK(reversed->getFirst() == 4);
+    CHECK(reversed->getLast() == 1);
+
+    reversed->addFirst(0);
+    reversed->addLast(5);
+    CHECK(values.toArray() == std::vector<int>{5, 1, 2, 3, 4, 0});
+    CHECK(reversed->toArray() == std::vector<int>{0, 4, 3, 2, 1, 5});
+
+    CHECK(reversed->removeFirst() == 0);
+    CHECK(reversed->removeLast() == 5);
+    CHECK(values.toArray() == std::vector<int>{1, 2, 3, 4});
+
+    auto backAgain = reversed->reversed();
+    CHECK(backAgain->toArray() == std::vector<int>{1, 2, 3, 4});
+    backAgain->add(9);
+    CHECK(values.toArray() == std::vector<int>{1, 2, 3, 4, 9});
+}
+
+TEST_CASE("a reversed Deque removes in its own encounter order and is read-only when const") {
+    cppstream::ArrayDeque<int> values{1, 2, 1};
+    auto reversed = values.reversed();
+
+    CHECK(reversed->removeFirstOccurrence(1));
+    CHECK(values.toArray() == std::vector<int>{1, 2});
+    CHECK(reversed->removeLastOccurrence(1));
+    CHECK(values.toArray() == std::vector<int>{2});
+
+    const cppstream::ArrayDeque<int>& readOnly = values;
+    auto view = readOnly.reversed();
+    CHECK(view->toArray() == std::vector<int>{2});
+    CHECK_THROWS_AS(static_cast<void>(view->add(3)),
+                    cppstream::UnsupportedOperationException);
+}
+
 TEST_CASE("ArrayDeque iterators are fail-fast and can remove") {
     cppstream::ArrayDeque<int> values{1, 2, 3, 4};
 

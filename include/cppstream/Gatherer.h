@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cppstream/RuntimeException.h>
+
 #include <functional>
 #include <type_traits>
 #include <utility>
@@ -50,23 +52,19 @@ private:
 /// one or many elements per input element, which is what makes windowing and
 /// scanning expressible without materialising the stream.
 ///
-/// Three differences from Java, all forced by the language or by scope:
+/// Two differences from Java, both forced by the language:
 ///
-///   * No `combiner`. In Java it exists solely to merge partial states across a
-///     parallel stream. gather() is a barrier in a parallel pipeline -- a gatherer
-///     may emit any number of elements per input, so a batch cannot be processed
-///     until it has been materialised -- which means it would be a required
-///     parameter that is never called. See DESIGN.md divergence 8.
-///   * No `andThen`. In a sequential pipeline `s.gather(a.andThen(b))` and
-///     `s.gather(a).gather(b)` are the same thing -- the second gatherer's input
-///     is the first's output, and both finishers run in the same order -- so the
-///     composition is already available at the pipeline level. Java needs it for
-///     named, reusable gatherer constants.
 ///   * State type `A` is named at the call site rather than inferred from the
 ///     integrator's parameters, because C++ has no target typing: the return type
 ///     cannot tell `Gatherer<T, ?, R>` what R is. `Gatherers::of` and
 ///     `Gatherers::ofSequential` spell the Java factories out; see DESIGN.md
 ///     divergence 34.
+///
+/// `combiner` is present for API fidelity and for `andThen`, but the current
+/// gather() bridge is a barrier: it integrates one element at a time even in a
+/// parallel pipeline, so it never has two partial states to merge. The accessor
+/// is useful to composed gatherers and to callers that manage their own parallel
+/// execution.
 template <class T, class A, class R>
 class Gatherer {
 public:
@@ -76,6 +74,7 @@ public:
 
     using Initializer = std::function<A()>;
     using Integrator = std::function<bool(A&, const T&, Downstream<R>&)>;
+    using Combiner = std::function<A(A&&, A&&)>;
     using Finisher = std::function<void(A&, Downstream<R>&)>;
 
     /// Java: Gatherer.of(integrator), the stateless form. A is Void.
@@ -102,6 +101,19 @@ public:
           integrator_(std::move(integrator)),
           finisher_(std::move(finisher)) {}
 
+    /// Java: Gatherer.of(initializer, integrator, combiner, finisher).
+    template <class InitializerFn, class IntegratorFn, class CombinerFn, class FinisherFn>
+        requires std::is_invocable_r_v<A, InitializerFn&> &&
+                 std::is_invocable_r_v<bool, IntegratorFn&, A&, const T&, Downstream<R>&> &&
+                 std::is_invocable_r_v<A, CombinerFn&, A&&, A&&> &&
+                 std::is_invocable_r_v<void, FinisherFn&, A&, Downstream<R>&>
+    Gatherer(InitializerFn initializer, IntegratorFn integrator, CombinerFn combiner,
+             FinisherFn finisher)
+        : initializer_(std::move(initializer)),
+          integrator_(std::move(integrator)),
+          combiner_(std::move(combiner)),
+          finisher_(std::move(finisher)) {}
+
     /// The state a fresh traversal starts from. Java's initializer() is never null
     /// there because the default is `() -> null`; here the default is a
     /// default-constructed A, which is why A must be default constructible.
@@ -114,20 +126,63 @@ public:
 
     /// Java: Integrator.integrate. False means "consume no more input"; the
     /// finisher still runs, as it does in Java.
-    bool integrate(A& state, const T& element, Downstream<R>& downstream) {
+    bool integrate(A& state, const T& element, Downstream<R>& downstream) const {
         return std::invoke(integrator_, state, element, downstream);
     }
 
     /// Java: Gatherer.finisher(), folded with "there is no finisher".
-    void finish(A& state, Downstream<R>& downstream) {
+    void finish(A& state, Downstream<R>& downstream) const {
         if (finisher_) {
             std::invoke(finisher_, state, downstream);
         }
     }
 
+    /// Java: Gatherer.combiner(). Empty when this gatherer has no combiner.
+    [[nodiscard]] const Combiner& combiner() const noexcept { return combiner_; }
+
+    [[nodiscard]] bool hasCombiner() const noexcept { return static_cast<bool>(combiner_); }
+
+    /// Java: Gatherer.combiner().apply(left, right).
+    [[nodiscard]] A combine(A&& left, A&& right) const {
+        if (!combiner_) {
+            throw UnsupportedOperationException("this gatherer has no combiner");
+        }
+        return std::invoke(combiner_, std::move(left), std::move(right));
+    }
+
+    /// Java: Gatherer.andThen(next). The first gatherer's output becomes the
+    /// second's input; both finishers run in order.
+    template <class A2, class R2>
+    [[nodiscard]] Gatherer<T, std::pair<A, A2>, R2> andThen(Gatherer<R, A2, R2> next) const {
+        using State = std::pair<A, A2>;
+        return Gatherer<T, State, R2>(
+            [self = *this, next] { return State(self.initialState(), next.initialState()); },
+            [self = *this, next](State& state, const T& element,
+                                 Downstream<R2>& downstream) {
+                Downstream<R> bridge([&state, &next,
+                                      &downstream](R output) {
+                    return next.integrate(state.second, output, downstream);
+                });
+                return self.integrate(state.first, element, bridge);
+            },
+            [self = *this, next](State&& left, State&& right) {
+                return State(self.combine(std::move(left.first), std::move(right.first)),
+                             next.combine(std::move(left.second), std::move(right.second)));
+            },
+            [self = *this, next](State& state, Downstream<R2>& downstream) {
+                Downstream<R> bridge([&state, &next,
+                                      &downstream](R output) {
+                    return next.integrate(state.second, output, downstream);
+                });
+                self.finish(state.first, bridge);
+                next.finish(state.second, downstream);
+            });
+    }
+
 private:
     Initializer initializer_;
     Integrator integrator_;
+    Combiner combiner_;
     Finisher finisher_;
 };
 

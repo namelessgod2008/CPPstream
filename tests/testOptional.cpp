@@ -217,6 +217,25 @@ TEST_CASE("Optional and std::optional convert in both directions") {
     CHECK(cppstream::Optional<int>(stdEmpty).isEmpty());
 }
 
+TEST_CASE("orGet supplies a fresh Optional only when empty") {
+    int calls = 0;
+    const auto fallback = [&calls] {
+        ++calls;
+        return cppstream::Optional<int>::of(99);
+    };
+
+    CHECK(cppstream::Optional<int>::of(1).orGet(fallback).get() == 1);
+    CHECK(calls == 0);
+    CHECK(cppstream::Optional<int>::empty().orGet(fallback).get() == 99);
+    CHECK(calls == 1);
+}
+
+TEST_CASE("toString follows Optional's Java rendering") {
+    CHECK(cppstream::Optional<int>::empty().toString() == "Optional.empty");
+    CHECK(cppstream::Optional<int>::of(42).toString() == "Optional[42]");
+    CHECK(cppstream::Optional<std::string>::of(std::string("hi")).toString() == "Optional[hi]");
+}
+
 TEST_CASE("the Optional trait recognises instantiations") {
     static_assert(cppstream::isOptional<cppstream::Optional<int>>);
     static_assert(cppstream::isOptional<cppstream::Optional<std::string>&>);
