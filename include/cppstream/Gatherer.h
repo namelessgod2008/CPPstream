@@ -104,9 +104,9 @@ public:
     /// Java: Gatherer.of(initializer, integrator, combiner, finisher).
     template <class InitializerFn, class IntegratorFn, class CombinerFn, class FinisherFn>
         requires std::is_invocable_r_v<A, InitializerFn&> &&
-                 std::is_invocable_r_v<bool, IntegratorFn&, A&, const T&, Downstream<R>&> &&
-                 std::is_invocable_r_v<A, CombinerFn&, A&&, A&&> &&
-                 std::is_invocable_r_v<void, FinisherFn&, A&, Downstream<R>&>
+                     std::is_invocable_r_v<bool, IntegratorFn&, A&, const T&, Downstream<R>&> &&
+                     std::is_invocable_r_v<A, CombinerFn&, A&&, A&&> &&
+                     std::is_invocable_r_v<void, FinisherFn&, A&, Downstream<R>&>
     Gatherer(InitializerFn initializer, IntegratorFn integrator, CombinerFn combiner,
              FinisherFn finisher)
         : initializer_(std::move(initializer)),
@@ -155,28 +155,33 @@ public:
     template <class A2, class R2>
     [[nodiscard]] Gatherer<T, std::pair<A, A2>, R2> andThen(Gatherer<R, A2, R2> next) const {
         using State = std::pair<A, A2>;
-        return Gatherer<T, State, R2>(
-            [self = *this, next] { return State(self.initialState(), next.initialState()); },
-            [self = *this, next](State& state, const T& element,
-                                 Downstream<R2>& downstream) {
-                Downstream<R> bridge([&state, &next,
-                                      &downstream](R output) {
-                    return next.integrate(state.second, output, downstream);
-                });
-                return self.integrate(state.first, element, bridge);
-            },
-            [self = *this, next](State&& left, State&& right) {
-                return State(self.combine(std::move(left.first), std::move(right.first)),
-                             next.combine(std::move(left.second), std::move(right.second)));
-            },
-            [self = *this, next](State& state, Downstream<R2>& downstream) {
-                Downstream<R> bridge([&state, &next,
-                                      &downstream](R output) {
-                    return next.integrate(state.second, output, downstream);
-                });
-                self.finish(state.first, bridge);
-                next.finish(state.second, downstream);
+        auto initializer = [self = *this, next] {
+            return State(self.initialState(), next.initialState());
+        };
+        auto integrator = [self = *this, next](State& state, const T& element,
+                                               Downstream<R2>& downstream) {
+            Downstream<R> bridge([&state, &next, &downstream](R output) {
+                return next.integrate(state.second, output, downstream);
             });
+            return self.integrate(state.first, element, bridge);
+        };
+        auto finisher = [self = *this, next](State& state, Downstream<R2>& downstream) {
+            Downstream<R> bridge([&state, &next, &downstream](R output) {
+                return next.integrate(state.second, output, downstream);
+            });
+            self.finish(state.first, bridge);
+            next.finish(state.second, downstream);
+        };
+        if (hasCombiner() && next.hasCombiner()) {
+            return Gatherer<T, State, R2>(
+                initializer, integrator,
+                [self = *this, next](State&& left, State&& right) {
+                    return State(self.combine(std::move(left.first), std::move(right.first)),
+                                 next.combine(std::move(left.second), std::move(right.second)));
+                },
+                finisher);
+        }
+        return Gatherer<T, State, R2>(initializer, integrator, finisher);
     }
 
 private:

@@ -84,17 +84,17 @@ public:
     template <class F>
     [[nodiscard]] Comparator thenComparingInt(F keyExtractor) const {
         return thenComparing(std::move(keyExtractor), Comparator<int>([](int left, int right) {
-            return compareValues(left, right);
-        }));
+                                 return compareValues(left, right);
+                             }));
     }
 
     /// Java: Comparator.thenComparingLong(keyExtractor).
     template <class F>
     [[nodiscard]] Comparator thenComparingLong(F keyExtractor) const {
-        return thenComparing(std::move(keyExtractor), Comparator<std::int64_t>(
-                                                           [](std::int64_t left, std::int64_t right) {
-                                                               return compareValues(left, right);
-                                                           }));
+        return thenComparing(std::move(keyExtractor),
+                             Comparator<std::int64_t>([](std::int64_t left, std::int64_t right) {
+                                 return compareValues(left, right);
+                             }));
     }
 
     /// Java: Comparator.thenComparingDouble(keyExtractor), including Java's
@@ -230,7 +230,10 @@ private:
             return 1;
         }
         if (left == right) {
-            return std::signbit(left) == std::signbit(right) ? 0 : (std::signbit(left) ? -1 : 1);
+            if (std::signbit(left) != std::signbit(right)) {
+                return std::signbit(left) ? -1 : 1;
+            }
+            return 0;
         }
         return 0;
     }

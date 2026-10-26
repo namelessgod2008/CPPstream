@@ -167,8 +167,8 @@ TEST_CASE("comparingInt, comparingLong and comparingDouble use primitive order")
     CHECK(byScore.compare(Person{"a", 20}, Person{"b", 30}) < 0);
 
     const double nan = std::numeric_limits<double>::quiet_NaN();
-    const auto numbers = cppstream::Comparator<double>::comparingDouble(
-        [](double value) { return value; });
+    const auto numbers =
+        cppstream::Comparator<double>::comparingDouble([](double value) { return value; });
     CHECK(numbers.compare(nan, 1.0) > 0);
     CHECK(numbers.compare(1.0, nan) < 0);
     CHECK(numbers.compare(nan, nan) == 0);
@@ -180,8 +180,8 @@ TEST_CASE("thenComparingInt and thenComparingDouble break ties") {
     const auto byName =
         cppstream::Comparator<Person>::comparing([](const Person& person) { return person.name; });
 
-    const auto nameThenAge = byName.thenComparingInt(
-        [](const Person& person) { return person.age; });
+    const auto nameThenAge =
+        byName.thenComparingInt([](const Person& person) { return person.age; });
     CHECK(nameThenAge.compare(Person{"alice", 20}, Person{"alice", 30}) < 0);
 
     const auto nameThenScore = byName.thenComparingDouble(

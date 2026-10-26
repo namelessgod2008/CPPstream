@@ -312,7 +312,7 @@ TEST_CASE("collectingAndThen transforms a downstream result") {
     const int wordsCount = cppstream::Stream<std::string>::of(words()).collect(
         cppstream::Collectors::collectingAndThen(
             cppstream::Collectors::toList<std::string>(),
-            [](cppstream::ArrayList<std::string> list) { return list.size(); }));
+            [](const cppstream::ArrayList<std::string>& list) { return list.size(); }));
 
     CHECK(wordsCount == 5);
 }
@@ -335,12 +335,11 @@ TEST_CASE("the four-argument toMap accepts a map factory") {
 }
 
 TEST_CASE("toUnmodifiableMap supports a merge function") {
-    cppstream::HashMap<int, int> counts =
-        cppstream::Stream<std::string>::of(words()).collect(
-            cppstream::Collectors::toUnmodifiableMap<std::string>(
-                [](const std::string& word) { return static_cast<int>(word.size()); },
-                [](const std::string&) { return 1; },
-                [](int left, int right) { return left + right; }));
+    cppstream::HashMap<int, int> counts = cppstream::Stream<std::string>::of(words()).collect(
+        cppstream::Collectors::toUnmodifiableMap<std::string>(
+            [](const std::string& word) { return static_cast<int>(word.size()); },
+            [](const std::string&) { return 1; },
+            [](int left, int right) { return left + right; }));
 
     CHECK(counts.isFrozen());
     CHECK(*counts.get(2) == 2);

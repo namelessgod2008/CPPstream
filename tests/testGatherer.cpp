@@ -2,6 +2,10 @@
 
 #include <doctest/doctest.h>
 
+#include <algorithm>
+#include <chrono>
+#include <condition_variable>
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -180,22 +184,49 @@ TEST_CASE("mapConcurrent maps in encounter order and rejects bad concurrency") {
                             .toArray();
 
     CHECK(values == std::vector<int>({10, 20, 30}));
-    CHECK_THROWS_AS(
-        static_cast<void>(cppstream::Gatherers::mapConcurrent<int, int>(
-            0, [](int value) { return value; })),
-        cppstream::IllegalArgumentException);
+    CHECK_THROWS_AS(static_cast<void>(cppstream::Gatherers::mapConcurrent<int, int>(
+                        0, [](int value) { return value; })),
+                    cppstream::IllegalArgumentException);
+}
+
+TEST_CASE("mapConcurrent really overlaps mappings up to its limit") {
+    std::mutex mutex;
+    std::condition_variable arrivedChanged;
+    int active = 0;
+    int arrived = 0;
+    int maxActive = 0;
+
+    const auto values = cppstream::Stream<int>::of({1, 2, 3, 4})
+                            .gather(cppstream::Gatherers::mapConcurrent<int, int>(
+                                2,
+                                [&](int value) {
+                                    std::unique_lock lock(mutex);
+                                    ++active;
+                                    ++arrived;
+                                    maxActive = std::max(maxActive, active);
+                                    arrivedChanged.notify_all();
+                                    arrivedChanged.wait_for(lock, std::chrono::milliseconds(500),
+                                                            [&] { return arrived >= 2; });
+                                    --active;
+                                    return value * 10;
+                                }))
+                            .toArray();
+
+    CHECK(values == std::vector<int>({10, 20, 30, 40}));
+    CHECK(maxActive == 2);
 }
 
 TEST_CASE("andThen feeds one gatherer's output into the next") {
-    const auto addOne = cppstream::Gatherers::mapConcurrent<int, int>(
-        2, [](int value) { return value + 1; });
-    const auto timesTwo = cppstream::Gatherers::mapConcurrent<int, int>(
-        2, [](int value) { return value * 2; });
+    const auto addOne =
+        cppstream::Gatherers::mapConcurrent<int, int>(2, [](int value) { return value + 1; });
+    const auto timesTwo =
+        cppstream::Gatherers::mapConcurrent<int, int>(2, [](int value) { return value * 2; });
 
     const auto values =
         cppstream::Stream<int>::of({1, 2, 3}).gather(addOne.andThen(timesTwo)).toArray();
 
     CHECK(values == std::vector<int>({4, 6, 8}));
+    CHECK_FALSE(addOne.andThen(timesTwo).hasCombiner());
 }
 
 TEST_CASE("a gatherer can expose and use its combiner") {
@@ -213,9 +244,14 @@ TEST_CASE("a gatherer can expose and use its combiner") {
 
     CHECK(summing.hasCombiner());
     CHECK(summing.combine(2, 3) == 5);
-    CHECK_FALSE(cppstream::Gatherers::mapConcurrent<int, int>(
-                    1, [](int value) { return value; })
-                    .hasCombiner());
+    CHECK_FALSE(cppstream::Gatherers::mapConcurrent<int, int>(1, [](int value) {
+                    return value;
+                }).hasCombiner());
+
+    const auto composed = summing.andThen(summing);
+    CHECK(composed.hasCombiner());
+    CHECK(composed.combine(std::pair<int, int>(1, 2), std::pair<int, int>(3, 4)) ==
+          std::pair<int, int>(4, 6));
 }
 
 TEST_CASE("a consumed stream cannot be gathered again") {

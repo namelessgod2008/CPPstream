@@ -125,8 +125,7 @@ public:
     /// mix-up is caught by the parallel tests rather than by the type system.
     // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
     explicit Stream(NextFn next, SizeHint sizeHint = std::nullopt, Budget budget = std::nullopt,
-                    bool parallel = false,
-                    std::shared_ptr<StreamCloseState> closeState = nullptr)
+                    bool parallel = false, std::shared_ptr<StreamCloseState> closeState = nullptr)
         : next_(std::move(next)),
           sizeHint_(sizeHint),
           budget_(budget),
@@ -187,12 +186,8 @@ public:
     public:
         Builder() = default;
 
-        Builder& add(const T& value) {
-            return addValue(value);
-        }
-        Builder& add(T&& value) {
-            return addValue(std::move(value));
-        }
+        Builder& add(const T& value) { return addValue(value); }
+        Builder& add(T&& value) { return addValue(std::move(value)); }
 
         /// Java: Stream.Builder.accept(value), an alias for add(value).
         void accept(const T& value) { static_cast<void>(add(value)); }
@@ -206,15 +201,14 @@ public:
             }
             built_ = true;
             const std::size_t promised = values_.size();
-            return Stream<T>(
-                NextFn([values = std::move(values_), index = std::size_t{0}]() mutable
-                           -> std::optional<T> {
-                    if (index >= values.size()) {
-                        return std::nullopt;
-                    }
-                    return std::optional<T>(std::in_place, std::move(values[index++]));
-                }),
-                promised, promised);
+            return Stream<T>(NextFn([values = std::move(values_),
+                                     index = std::size_t{0}] mutable -> std::optional<T> {
+                                 if (index >= values.size()) {
+                                     return std::nullopt;
+                                 }
+                                 return std::optional<T>(std::in_place, std::move(values[index++]));
+                             }),
+                             promised, promised);
         }
 
     private:
@@ -720,12 +714,12 @@ public:
     /// Java: Stream.collect(supplier, accumulator, combiner). Unlike the Collector
     /// overload this one has no finisher: the accumulator is the result.
     template <class S, class A, class C>
-        requires std::invocable<S&> && std::invocable<A&, std::remove_cvref_t<
-                                          std::invoke_result_t<S&>>&, T&> &&
+        requires std::invocable<S&> &&
+                 std::invocable<A&, std::remove_cvref_t<std::invoke_result_t<S&>>&, T&> &&
                  std::invocable<C&, std::remove_cvref_t<std::invoke_result_t<S&>>&&,
                                 std::remove_cvref_t<std::invoke_result_t<S&>>&&>
-    [[nodiscard]] auto collect(S supplier, A accumulator, C combiner) &&
-        -> std::remove_cvref_t<std::invoke_result_t<S&>> {
+    [[nodiscard]] auto collect(S supplier, A accumulator,
+                               C combiner) && -> std::remove_cvref_t<std::invoke_result_t<S&>> {
         using R = std::remove_cvref_t<std::invoke_result_t<S&>>;
         NextFn next = takeNext();
         R result = std::invoke(supplier);
@@ -1038,9 +1032,7 @@ public:
     /// flatMap's inner streams, mapMulti and gather, which are stateful or 1:N and
     /// therefore keep a sequential barrier. See DESIGN.md divergence 8 and section
     /// 7.10 for the full table.
-    Stream<T> parallel() && {
-        return Stream<T>(takeNext(), sizeHint_, budget_, true, closeState_);
-    }
+    Stream<T> parallel() && { return Stream<T>(takeNext(), sizeHint_, budget_, true, closeState_); }
 
     /// Java: Stream.sequential(). Turns batching off again from this point on;
     /// the stages already built keep whatever they were built with.

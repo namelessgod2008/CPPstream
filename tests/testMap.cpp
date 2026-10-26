@@ -279,7 +279,8 @@ TEST_CASE("compute, replace, replaceAll and remove(key, value)") {
     CHECK(values
               .compute(std::string("a"),
                        [](const std::string&, const int* current) {
-                           return cppstream::Optional<int>::of(current == nullptr ? 1 : *current + 1);
+                           return cppstream::Optional<int>::of(current == nullptr ? 1
+                                                                                  : *current + 1);
                        })
               .get() == 2);
     CHECK(values
@@ -336,13 +337,13 @@ TEST_CASE("Map.Entry comparator factories order entries by key or value") {
     values.put(3, std::string("three"));
 
     std::vector<Entry> byKey = values.entrySet().toArray();
-    std::sort(byKey.begin(), byKey.end(), Entry::comparingByKey());
+    std::ranges::sort(byKey, Entry::comparingByKey());
     CHECK(byKey[0].getKey() == 1);
     CHECK(byKey[1].getKey() == 2);
     CHECK(byKey[2].getKey() == 3);
 
     std::vector<Entry> byValue = values.entrySet().toArray();
-    std::sort(byValue.begin(), byValue.end(), Entry::comparingByValue());
+    std::ranges::sort(byValue, Entry::comparingByValue());
     CHECK(byValue[0].getValue() == "one");
     CHECK(byValue[1].getValue() == "three");
     CHECK(byValue[2].getValue() == "two");

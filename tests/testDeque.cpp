@@ -144,8 +144,7 @@ TEST_CASE("a reversed Deque removes in its own encounter order and is read-only 
     const cppstream::ArrayDeque<int>& readOnly = values;
     auto view = readOnly.reversed();
     CHECK(view->toArray() == std::vector<int>{2});
-    CHECK_THROWS_AS(static_cast<void>(view->add(3)),
-                    cppstream::UnsupportedOperationException);
+    CHECK_THROWS_AS(static_cast<void>(view->add(3)), cppstream::UnsupportedOperationException);
 }
 
 TEST_CASE("ArrayDeque iterators are fail-fast and can remove") {

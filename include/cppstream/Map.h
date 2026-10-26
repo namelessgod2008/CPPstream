@@ -188,8 +188,7 @@ public:
     /// result removes the mapping. This is the one Map callback that can install a
     /// mapping for an absent key.
     [[nodiscard]] virtual Optional<V> compute(
-        const K& key,
-        const std::function<Optional<V>(const K&, const V*)>& remappingFunction) {
+        const K& key, const std::function<Optional<V>(const K&, const V*)>& remappingFunction) {
         checkNotFrozen();
         const V* current = get(key);
         Optional<V> computed = std::invoke(remappingFunction, key, current);
@@ -214,6 +213,7 @@ public:
     }
 
     /// Java: Map.replace(key, oldValue, newValue).
+    // NOLINTNEXTLINE(bugprone-easily-swappable-parameters): Java's parameter order.
     [[nodiscard]] virtual bool replace(const K& key, const V& oldValue, const V& newValue) {
         checkNotFrozen();
         requireNonNullValue(newValue);

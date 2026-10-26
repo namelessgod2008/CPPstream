@@ -611,20 +611,21 @@ public:
 
     /// Java: Collectors.collectingAndThen(downstream, finisher). The downstream
     /// finisher runs first, then the extra function transforms its result.
+    // NOLINTBEGIN(readability-redundant-typename): gcc requires `typename` here.
     template <class D, class F, class T = typename D::elementType,
               class R = std::remove_cvref_t<std::invoke_result_t<F&, typename D::resultType>>>
     static Collector<T, typename D::accumulatorType, R> collectingAndThen(const D& downstream,
-                                                                            F finisher) {
+                                                                          F finisher) {
         std::vector<Characteristics> characteristics = downstream.characteristics();
         std::erase(characteristics, Characteristics::identityFinish);
         return Collector<T, typename D::accumulatorType, R>(
             downstream.supplier(), downstream.accumulator(), downstream.combiner(),
             [downstream, finisher](typename D::accumulatorType&& accumulator) -> R {
-                return std::invoke(
-                    finisher,
-                    std::invoke(downstream.finisher(), std::move(accumulator)));
+                return std::invoke(finisher,
+                                   std::invoke(downstream.finisher(), std::move(accumulator)));
             },
             std::move(characteristics));
+        // NOLINTEND(readability-redundant-typename)
     }
 
     /// Java 12: Collectors.teeing(first, second, merger).
@@ -719,11 +720,13 @@ public:
     /// Java: Collectors.groupingBy(classifier, mapFactory, downstream). The
     /// factory selects the result map type; groups are still accumulated in a
     /// std::unordered_map and inserted through Map::put during the finisher.
+    // NOLINTBEGIN(readability-redundant-typename): gcc requires `typename` here.
     template <class T, class F, class MF, class D, class K = MapKeyOf<T, F>,
               class A = typename D::accumulatorType, class R = typename D::resultType,
               class M = std::remove_cvref_t<std::invoke_result_t<MF&>>>
-    static Collector<T, std::unordered_map<K, A>, M>
-    groupingBy(F classifier, MF mapFactory, const D& downstream) {
+    // NOLINTEND(readability-redundant-typename)
+    static Collector<T, std::unordered_map<K, A>, M> groupingBy(F classifier, MF mapFactory,
+                                                                const D& downstream) {
         using Accumulator = std::unordered_map<K, A>;
         return Collector<T, Accumulator, M>(
             [] { return Accumulator(); },
@@ -771,9 +774,11 @@ public:
     }
 
     /// Java: Collectors.groupingByConcurrent(classifier, mapFactory, downstream).
+    // NOLINTBEGIN(readability-redundant-typename): gcc requires `typename` here.
     template <class T, class F, class MF, class D, class K = MapKeyOf<T, F>,
               class A = typename D::accumulatorType, class R = typename D::resultType,
               class M = std::remove_cvref_t<std::invoke_result_t<MF&>>>
+    // NOLINTEND(readability-redundant-typename)
     static auto groupingByConcurrent(F classifier, MF mapFactory, const D& downstream) {
         return groupingBy<T>(std::move(classifier), std::move(mapFactory), downstream);
     }

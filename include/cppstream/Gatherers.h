@@ -5,6 +5,7 @@
 #include <cppstream/RuntimeException.h>
 
 #include <deque>
+#include <future>
 #include <string>
 #include <utility>
 #include <vector>
@@ -19,23 +20,37 @@ namespace cppstream {
 ///
 class Gatherers {
 public:
-    /// Java: Gatherers.mapConcurrent(maxConcurrency, mapper). The current gather
-    /// bridge is a barrier, so the work is performed in encounter order on the
-    /// calling thread; maxConcurrency is validated but cannot create virtual
-    /// threads in C++. The observable result is the same as Java's ordered
-    /// mapConcurrent.
+    /// Java: Gatherers.mapConcurrent(maxConcurrency, mapper). At most
+    /// maxConcurrency mappings run at once, and results are delivered in encounter
+    /// order. C++ has no virtual threads, so each in-flight mapping is a std::async
+    /// task instead; the concurrency cap is the observable contract.
     template <class T, class R, class F>
         requires std::is_invocable_r_v<R, F&, const T&>
-    [[nodiscard]] static Gatherer<T, Void, R> mapConcurrent(int maxConcurrency, F mapper) {
+    [[nodiscard]] static Gatherer<T, std::deque<std::future<R>>, R> mapConcurrent(
+        int maxConcurrency, F mapper) {
         if (maxConcurrency <= 0) {
             throw IllegalArgumentException("maxConcurrency must be greater than zero: " +
                                            std::to_string(maxConcurrency));
         }
-        return Gatherer<T, Void, R>(
-            [mapper = std::move(mapper)](Void&, const T& element,
-                                         Downstream<R>& downstream) {
-                static_cast<void>(downstream.push(std::invoke(mapper, element)));
+        return Gatherer<T, std::deque<std::future<R>>, R>(
+            [] { return std::deque<std::future<R>>{}; },
+            [maxConcurrency, mapper = std::move(mapper)](std::deque<std::future<R>>& pending,
+                                                         const T& element,
+                                                         Downstream<R>& downstream) mutable {
+                if (static_cast<int>(pending.size()) >= maxConcurrency) {
+                    downstream.push(pending.front().get());
+                    pending.pop_front();
+                }
+                pending.push_back(std::async(std::launch::async, [mapper, element] mutable {
+                    return std::invoke(mapper, element);
+                }));
                 return true;
+            },
+            [](std::deque<std::future<R>>& pending, Downstream<R>& downstream) {
+                while (!pending.empty()) {
+                    downstream.push(pending.front().get());
+                    pending.pop_front();
+                }
             });
     }
 

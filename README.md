@@ -16,7 +16,7 @@
 
 ## 状态
 
-主要功能都做完了，也全都测过了：**245 个测试用例、1508 条断言**，在最严格的一整套检查下都
+主要功能都做完了，也全都测过了：**272 个测试用例、1620 条断言**，在最严格的一整套检查下都
 通过；另外还有 5 个"故意写错、看它拦不拦得住"的用例。整套东西由 34 个文件组成，配上 25 个
 测试和示例文件，用检查工具扫过一遍，一处警告都没有。
 
@@ -36,8 +36,10 @@
 - **拿真的比对过**：有些细节 Java 自己都写得含糊，我们没拍脑袋，而是把真的 Java 跑一遍照着抄，
   这些对照就放在 `tests/jdk/`。
 
-还有一小批不常用的口子没开：自己拼流的 `builder`、把流当迭代器用、关闭钩子、少数收集器和
-集合便利方法；`mapConcurrent` 也在其中。完整清单写在 DESIGN.md 的 §7.11，没有藏着。
+常用接口已经补齐：自己拼流的 `builder`、把流当迭代器用、关闭钩子、三参数归约与收集、
+并发收集器、集合的首尾/反向视图，以及真正并发的 `mapConcurrent` 都能用。唯一仍然没开的口子
+是 `spliterator`（本库的拉取式管道没有 Java 那种可切分协议）；原始类型流则是明确不做的设计
+选择。说明写在 DESIGN.md 的 §7.11。
 
 ### 快速浏览
 
@@ -206,7 +208,7 @@ original wording.
 
 ## Status
 
-The main features are done and well tested: **245 test cases, 1508 checks**, passing under the
+The main features are done and well tested: **272 test cases, 1620 checks**, passing under the
 strictest checking modes, plus 5 cases that are deliberately written wrong to
 prove the tool catches them. It is 34 files, with 25 test and example files, and a
 sweep with the checking tools found not one warning.
@@ -234,10 +236,13 @@ What it can do for you:
   not guess -- we ran the real Java and copied what it does. Those comparisons sit
   under `tests/jdk/`.
 
-A small batch of less-common openings is still missing: building a stream by
-hand, using a stream as an iterator, close hooks, a few collectors and collection
-conveniences -- `mapConcurrent` among them. The full list is in DESIGN.md
-section 7.11, written down rather than hidden.
+The common openings are now filled: building a stream by hand, using a stream as
+an iterator, close hooks, three-argument reduce/collect, concurrent collectors,
+first/last and reversed collection views, and a genuinely concurrent
+`mapConcurrent` all work. The one remaining opening is `spliterator` -- this
+library's pull pipeline has no Java-style splittable protocol -- while primitive
+streams are a deliberate design choice. Both are explained in DESIGN.md section
+7.11.
 
 ### Quick look
 

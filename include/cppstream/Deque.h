@@ -137,9 +137,7 @@ public:
         return true;
     }
 
-    bool remove(const T& element) override {
-        return writable().removeLastOccurrence(element);
-    }
+    bool remove(const T& element) override { return writable().removeLastOccurrence(element); }
 
     bool offer(const T& element) override { return add(element); }
     bool offer(T&& element) override { return add(std::move(element)); }
@@ -214,8 +212,7 @@ public:
 
         const T& next() override {
             if (owner_->backing_->modCount() != expectedModCount_) {
-                throw ConcurrentModificationException(
-                    "backing deque modified during iteration");
+                throw ConcurrentModificationException("backing deque modified during iteration");
             }
             if (position_ >= values_.size()) {
                 throw NoSuchElementException("iterator exhausted");

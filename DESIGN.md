@@ -338,7 +338,7 @@ std::move(s).count();             // 运行期 IllegalStateException
 | `ifPresent(fn)` / `ifPresentOrElse` | 无 | 有 |
 | `map` / `filter` / `flatMap` | `transform` / 无 / `and_then` | 同名 |
 | `stream()` | 无 | 有 |
-| `or(fn)` / `toString()` | 无 / 无 | 未提供，见 §7.11 |
+| `or(fn)` / `toString()` | 无 / 无 | 有；`or` 是 C++ 关键字，因此改名为 `orGet(fn)`（§8 第 38 条） |
 
 自建类额外提供 `unwrap()` / `fromStd()` 与 `std::optional` 互转，并且**隐式转换构造**，避免生态割裂。`Stream::findFirst()` / `max()` / `min()` / `reduce()` 返回它。
 
@@ -372,7 +372,7 @@ RuntimeException : std::runtime_error
 1. **额外提供 `operator()`**，返回 `compare(...) < 0`。这是唯一一处主动加的 C++ 惯用法成员，理由是硬性的：不能交给 `std::sort`、`std::ranges` 算法和 `std::map` 的比较器在这个语言里没有使用价值。`compare()` 仍然保留，Java 风格的调用照常可用。
 2. **不提供 `equals`**。Java 的 `Comparator.equals` 默认是引用同一性，而 `std::function` 无法有意义地复刻这个语义。测试里改用 `compare()` 在样本值上验证。
 
-`Comparator<T>` 是同质的（T 对 T），与 Java 的 `Comparator<T>` 一致；没有复刻 `comparingInt` / `comparingLong` / `comparingDouble`，理由与砍掉 `IntStream` 族相同（§8 第 7 条）——那些方法存在的唯一目的是避免装箱。`thenComparingInt` / `thenComparingLong` / `thenComparingDouble` 同样未提供，见 §7.11。
+`Comparator<T>` 是同质的（T 对 T），与 Java 的 `Comparator<T>` 一致。`comparingInt` / `comparingLong` / `comparingDouble` 与 `thenComparingInt` / `thenComparingLong` / `thenComparingDouble` 均按 Java 同名提供；因为 C++ 没有装箱，它们最终仍返回泛型的 `Comparator<T>`。double 版本按 Java 的 `Double.compare` 处理 NaN 与 ±0.0（§8 第 21 条）。
 
 `naturalOrder()` 用 `operator<` 而不是 `std::compare_three_way` 定义，这样三向比较符之前写好的类型也能直接用。
 
@@ -446,7 +446,7 @@ public:
 
 上面是最终签名，与初稿的两处差异（`iterator()` 的非 const / 只读二分、`forEach` 拿 `T&`）在 §6.6 说明。
 
-`removeIf` 不在 `Collection` 的虚接口上，而是 `AbstractCollection` 的普通成员（所有具体容器都继承它）；`spliterator()` 与 `toArray(T[])` 未提供，见 §7.11。
+`removeIf` 不在 `Collection` 的虚接口上，而是 `AbstractCollection` 的普通成员（所有具体容器都继承它）。`toArray(T[])` 由 `toArray(std::vector<T>&)` 承担：目标 vector 会被重设为当前容器的内容。唯一仍未提供的是 `spliterator()`，见 §7.11。
 
 ### 6.3 List
 
@@ -471,7 +471,7 @@ public:
 
 `get` 返回 `T&`：Java 的 `List.get` 返回引用型对象，Java 里可以直接改它引用的对象，C++ 里对应的就是返回可写引用。
 
-`List.replaceAll` 与 Java 21 `SequencedCollection` 的 `reversed()` / `addFirst` / `addLast` / `getFirst` / `getLast` / `removeFirst` / `removeLast` 尚未提供；`LinkedList` 因实现 `Deque` 已有 `addFirst` 一族。见 §7.11。
+`List.replaceAll` 与 Java 21 `SequencedCollection` 的 `reversed()` / `addFirst` / `addLast` / `getFirst` / `getLast` / `removeFirst` / `removeLast` 都已提供。`reversed()` 返回与 `subList` 同类的活视图：写入落在原列表上，反向视图再反向一次即回到原顺序。`Lists::reversed(list)` 仍保留为返回独立副本的工厂便利。`Deque` 的 `reversed()` 同样是活视图，`TreeSet` / `TreeMap` 的 `reversed()` 则是 `descendingSet()` / `descendingMap()` 的 Java 21 同义名。
 
 ### 6.4 Set / Map
 
@@ -482,7 +482,7 @@ class Set : public AbstractCollection<T> { /* 无新增虚函数，语义约束�
 template <class K, class V>
 class Map {
 public:
-    class Entry;                                       // getKey / getValue / setValue / equals / hashCode
+    class Entry;                                       // getKey / getValue / setValue / equals / hashCode / comparingByKey / comparingByValue
     virtual ~Map() = default;
     virtual int  size() const = 0;
     virtual bool isEmpty() const;                       // 默认实现：size() == 0
@@ -497,9 +497,14 @@ public:
     virtual Optional<V> putIfAbsent(K&& key, V&& value) = 0;
     virtual void putAll(const Map<K, V>& other);
     virtual Optional<V> remove(const K& key) = 0;
+    virtual bool remove(const K& key, const V& value);  // 值相等才删除
     virtual void clear() = 0;
     virtual Optional<V> computeIfAbsent(const K&, const std::function<Optional<V>(const K&)>&) = 0;
     virtual Optional<V> computeIfPresent(const K&, const std::function<Optional<V>(const K&, const V&)>&) = 0;
+    virtual Optional<V> compute(const K&, const std::function<Optional<V>(const K&, const V*)>&);
+    virtual Optional<V> replace(const K&, const V&);
+    virtual bool replace(const K&, const V& oldValue, const V& newValue);
+    template <class F> void replaceAll(F function);
     virtual Optional<V> merge(const K&, const V&, const std::function<Optional<V>(const V&, const V&)>&) = 0;
     virtual void forEach(const std::function<void(const K&, V&)>& action);
     int modCount() const;                               // C++ 扩展，供视图 fail-fast（§7.7 前身）
@@ -521,7 +526,7 @@ protected:
 
 **`keySet()` / `values()` / `entrySet()` / `equals()` / `hashCode()` 是非虚成员**（Java 里它们由 `AbstractMap` 实现）。若声明为纯虚，`TreeMap<不可哈希的键, V>` 会因为 `keySet()` 返回 `HashSet<K>` 而强制键可哈希。作为普通成员函数，它们只在使用时实例化，与库里其它"附加操作"的规则一致。
 
-`Map.compute` / `replace` / `replaceAll` / `remove(key, value)` 与 `Map.Entry.comparingByKey` / `comparingByValue` 尚未提供；`removeIf` 的放置见 §6.2。见 §7.11。
+`Map.compute` / `replace` / `replaceAll` / `remove(key, value)` 与 `Map.Entry.comparingByKey` / `comparingByValue` 都已提供。`compute` 的回调用 `const V*` 表示键是否存在（`nullptr` 即不存在），返回空 `Optional` 删除映射；成功安装新值时，返回值是安装后的副本，而不是被 move 走的局部对象。`removeIf` 的放置见 §6.2。
 
 ### 6.5 实现类与 hash 策略
 
@@ -577,10 +582,11 @@ public:
     // addFirst / addLast / offerFirst / offerLast / removeFirst / removeLast
     // pollFirst / pollLast / removeFirstOccurrence / removeLastOccurrence
     // getFirst / getLast / peekFirst / peekLast / push / pop / descendingIterator
+    // reversed() -> ReversedDequeView，反向活视图
 };
 ```
 
-Java 的"抛异常版 / 哨兵版"成对操作原样保留，但哨兵从 `null` 换成 `Optional<T>`（§8 第 4、5 条）。`ArrayDeque` 是唯一的实现，同时具备队列、栈、双端三种用法。
+Java 的"抛异常版 / 哨兵版"成对操作原样保留，但哨兵从 `null` 换成 `Optional<T>`（§8 第 4、5 条）。`ArrayDeque` 是唯一的实现，同时具备队列、栈、双端三种用法。`reversed()` 返回 `ReversedDequeView`：它把视图的首尾映射到原容器的另一端，迭代器把 `descendingIterator()` 与 `iterator()` 互换；写透、fail-fast、const 只读都沿视图链传递。
 
 `Queue` 与 `List` / `Set` 一样直接继承 `AbstractCollection`，全库保持单一继承链。`LinkedList` 不继承 `Deque`，原因见 §8 第 29 条。
 
@@ -588,6 +594,7 @@ Java 的"抛异常版 / 哨兵版"成对操作原样保留，但哨兵从 `null`
 
 ```cpp
 template <class T> class ListView : public List<T>;                       // subList
+template <class T> class ReversedDequeView : public Deque<T>;             // Deque.reversed
 template <class K, class V> class KeySetView : public AbstractSet<K>;     // keySet
 template <class K, class V> class ValuesView : public AbstractCollection<V>;  // values
 template <class K, class V> class EntrySetView : public AbstractSet<typename Map<K,V>::Entry>;
@@ -596,13 +603,13 @@ template <class K, class V, class Compare> class TreeMapRangeView : public Map<K
 template <class K, class V, class Compare> class TreeMapKeySetView : public NavigableSet<K>;  // navigableKeySet / descendingKeySet
 ```
 
-六个视图都是"一个容器指针 + 一点簿记"，没有自己的存储：
+这些视图都是"一个容器指针 + 一点簿记"，没有自己的存储：
 
 - **写透**：视图上的 `set` / `add` / `remove` / `clear` 直接落到被看的容器上；map 视图的 `remove` 删的是**映射**，`add` 抛 `UnsupportedOperationException`（与 Java 一致，一个有 key 没 value 的条目在 Map 里不存在）。
 - **fail-fast**：视图迭代器持有被看容器的 `modCount` 快照，改动就抛 `ConcurrentModificationException`——和 Java 的 `SubList` / `KeySet` 完全同一套机制（§11 第 17 条）。
 - **const 只读**：从 const 容器取的视图，mutator 与 `iterator()` 都抛（§8 第 35 条）。只读视图再派生的子视图同样是只读的——`unmodifiableNavigableSet(set).subSet(a, b)` 读得通，与 Java 一致。
 - **视图对象自身的 const 是编译期保护**：`const auto window = m.subMap(a, b);` 让 mutator 直接编译不过；从 const 容器取得的只读性是运行期的 `UnsupportedOperationException`。两者互补，测试两条路径都覆盖。
-- **按值返回**：map 的三个视图按值返回（无状态，拷贝无成本），`subList` 返回 `unique_ptr`（视图没有可拷贝的状态——两个副本指向同一个窗口，那是迭代器级别的东西）。两个范围视图与 `TreeMapKeySetView` 同样按值返回：它们的"状态"就是根指针加一对栅栏加方向，拷贝下来仍然指向同一棵树，不会悬垂。
+- **按值返回**：map 的三个视图按值返回（无状态，拷贝无成本），`subList` 与 `Deque.reversed()` 返回 `unique_ptr`（视图没有可拷贝的状态——两个副本指向同一个窗口，那是迭代器级别的东西）。两个范围视图与 `TreeMapKeySetView` 同样按值返回：它们的"状态"就是根指针加一对栅栏加方向，拷贝下来仍然指向同一棵树，不会悬垂。
 
 `Map::Entry` 仍是值类型：entry 视图的迭代器每次物化一个 `Entry`，`setValue` 写副本而不写回 map。这是活视图里唯一残留的差异，已记在 §8 第 12 条。
 
@@ -654,12 +661,15 @@ Java 22 的 `Gatherer<T,A,R>` 是"每个元素该做什么"的命令式版本：
 
 | 组件 | 本库形态 |
 |---|---|
-| `Gatherer<T,A,R>` | 三个 `std::function`：`initializer` / `integrator` / `finisher`（`initializer` 与 `finisher` 可空） |
+| `Gatherer<T,A,R>` | 四个 `std::function`：`initializer` / `integrator` / `combiner` / `finisher`（前三者可空；空的 `initializer` 使用默认构造的 `A`） |
 | `Downstream<R>` | 持有 `std::function<bool(R)>`；`push` 恒真，`isRejecting` 恒假（§8 第 33 条） |
+| `Gatherers` | `mapConcurrent` / `windowFixed` / `windowSliding` / `fold` / `scan` / `of` / `ofSequential` |
+| `Gatherer.andThen` | 把第二个 gatherer 接到第一个的输出上；状态合并与 finisher 顺序都与 Java 一致 |
+| `Void` | `using Void = std::monostate`，等价于 Java 的 `Void` 单值类型 |
 
 `Stream::mapMulti<R>(mapper)` 直接建在 `gather()` 上：mapper 被包成一个 `Gatherer<T, Void, R>`，其 integrator 把 `Void&` 状态忽略掉、把元素与 `Downstream<R>` 交给调用者的 lambda。"一个 gatherer 对每个输入发出零个或多个结果"就是 `mapMulti` 的定义，所以推送/拉取的桥接不必写第二遍，`sizeHint` 也按 `gather` 的规矩丢掉。`R` 必须在调用点显式给出（`mapMulti<int>(...)`），理由与 `Gatherers::of<T, A, R>` 相同：C++ 没有目标类型推断（§8 第 34 条）。
-| `Gatherers` | `windowFixed` / `windowSliding` / `fold` / `scan` / `of` / `ofSequential` |
-| `Void` | `using Void = std::monostate`，等价于 Java 的 `Void` 单值类型 |
+
+`Gatherers::mapConcurrent(maxConcurrency, mapper)` 用 `std::async` 启动作业，最多同时保留 `maxConcurrency` 个 future，并按输入顺序等待和交付结果。它不依赖 `parallel()` 标志，和 Java 一样是 gatherer 自身的并发行为；C++ 没有虚拟线程，所以不能用 Java 的虚拟线程实现逐字复刻，但并发上限与有序结果这两个可观察契约保持一致。
 
 **拉取/推送的接缝**：管道是拉取的，gatherer 是推送的，两者用一个缓冲区对齐——`gather` 阶段在每次被拉取时反复运行 integrator，直到它产生了输出或上游枯竭，产出的元素进入队列逐个交出。上游枯竭或 integrator 返回 `false` 时调用一次 finisher，finisher 推入的元素照样从队列里交出。`limit` 停止拉取即可，队列剩下的元素不会被生产，这正是 `windowFixed(3)` 配 `limit(2)` 能在无限流上终止的原因。
 
@@ -707,7 +717,7 @@ parallelPool().forEach(batch.size(), [&](i) { out[i] = mapper(in[i]); });
 
 - **嵌套保护**：从池内工作线程发起的并行阶段**内联执行**而不是再排一个任务然后等线程。这不是优化，是防死锁：外层批次占着 N 个 worker 且都在等内层结果时，池里没有空线程可派，ForkJoinPool 靠 work-stealing 解决这个问题，这里用一个 `thread_local` 标志解决——代价是嵌套的并行降级为顺序，与 ForkJoin 无法切分时的取舍相同。测试 `a parallel stage pulled from inside a worker degrades instead of deadlocking` 盯着它。
 
-- **终结操作的分片合并**：`collect` / `reduce`（两个重载）/ `min` / `max` / `sum` 把一批切成 `parallelism()` 片，每片在自己的累加器上累加，再**按遭遇顺序**逐个 `combiner` 合并进一个总累加器。这正是 §8 第 8 条里被点名的"`Collector::combiner` 变成硬需求"——它是构造参数，一直都在，这次终于被调用（`Gatherer::combiner` 仍然缺席，理由见下）。合并顺序保证了 `toList` / `joining` / `groupingBy` 这些对顺序敏感的收集器在并行下也给出与顺序版逐字节相同的结果。内存上每次只保留 `parallelism()` 个分片，不会随元素总数增长。每片的初始累加器由**调用线程**先按 `supplier` 建好，worker 只往已经存在的对象里累加（`supplier` 是 Collector 的 identity，本来就是廉价构造），所以分片容器是 `std::vector<A>` 而不是 `std::vector<std::optional<A>>`——没有"槽位可能还没填"这个状态，按遭遇顺序的合并就是全覆盖的。
+- **终结操作的分片合并**：`collect` / `reduce`（两个重载）/ `min` / `max` / `sum` 把一批切成 `parallelism()` 片，每片在自己的累加器上累加，再**按遭遇顺序**逐个 `combiner` 合并进一个总累加器。这正是 §8 第 8 条里被点名的"`Collector::combiner` 变成硬需求"——它是构造参数，一直都在，这次终于被调用。`Gatherer::combiner` 也已在 API 上提供，但 `gather` 是屏障，不会主动调用它来合并部分状态。合并顺序保证了 `toList` / `joining` / `groupingBy` 这些对顺序敏感的收集器在并行下也给出与顺序版逐字节相同的结果。内存上每次只保留 `parallelism()` 个分片，不会随元素总数增长。每片的初始累加器由**调用线程**先按 `supplier` 建好，worker 只往已经存在的对象里累加（`supplier` 是 Collector 的 identity，本来就是廉价构造），所以分片容器是 `std::vector<A>` 而不是 `std::vector<std::optional<A>>`——没有"槽位可能还没填"这个状态，按遭遇顺序的合并就是全覆盖的。
 
 **哪些真的并行、哪些是屏障**（`parallel()` 之后）：
 
@@ -745,7 +755,7 @@ Optional<double> average() && requires std::integral<T> || std::floating_point<T
 
 **并行流下的终结操作**：`forEach` / `collect` / `reduce`（两种重载）/ `min` / `max` / `sum`（整数）/ 三种 `match` 在 `parallel()` 之后按批并行——`collect` 一系走"每片一个累加器 + 按遭遇顺序 `combiner` 合并"，`match` 一系靠一批命中就停止拉取。`forEachOrdered` / `count` / `toArray` / `toList` / `findFirst` / `findAny` / `average` / `sum`（double）保持顺序执行，只享受上游阶段的并行：它们自身没有可并行的算力，`sum`（double）另有"补偿加法不可结合"的原因（见上），而 `findFirst` 的"只拉一个元素"恰恰是它该有的短路。分片合并要求累加器可结合，与 Java 对并行归约的要求一致。详见 §7.10。
 
-这一版还没有 `Stream.iterator()` / `spliterator()` / `onClose()` / `close()` / `toArray(generator)`，也没有 `reduce(identity, accumulator, combiner)` 与 `collect(supplier, accumulator, combiner)` 两个三参重载；完整清单见 §7.11。
+`Stream.iterator()`、`onClose()` / `close()`、`toArray(generator)`、`reduce(identity, accumulator, combiner)` 与 `collect(supplier, accumulator, combiner)` 都已提供；`Stream.builder()` / `Stream.Builder` 见 §7.6。`iterator()` 只交出一次遍历，关闭钩子在管道的各阶段间共享，并且只在显式 `close()` 时执行；终结操作不会隐式关闭流，与 Java 一致。唯一仍未提供的是 `spliterator()`：拉取闭包没有 Java `Spliterator` 的切分与特征描述，完整说明见 §7.11。
 
 ### 7.3 Collector 模型
 
@@ -813,9 +823,9 @@ auto collect(C collector) && -> typename C::result_type;
 
 ### 7.5 Collectors 清单
 
-`toList` / `toUnmodifiableList` / `toSet` / `toUnmodifiableSet` / `toMap(k, v)` / `toMap(k, v, merge)` / `toUnmodifiableMap(k, v)` / `joining()` / `joining(delim)` / `joining(delim, prefix, suffix)` / `counting()` / `summingInt` / `summingLong` / `summingDouble` / `averagingInt` / `averagingLong` / `averagingDouble` / `minBy` / `maxBy` / `reducing(...)`（三重重载）/ `mapping(fn, downstream)` / `filtering(pred, downstream)` / `flatMapping` / `groupingBy(classifier)` / `groupingBy(classifier, downstream)` / `partitioningBy(pred)` / `partitioningBy(pred, downstream)` / `teeing(d1, d2, merger)` / `summarizingInt` / `summarizingLong` / `summarizingDouble`。
+`toList` / `toUnmodifiableList` / `toSet` / `toUnmodifiableSet` / `toMap(k, v)` / `toMap(k, v, merge)` / `toMap(k, v, merge, mapFactory)` / `toUnmodifiableMap(k, v)` / `toUnmodifiableMap(k, v, merge)` / `toConcurrentMap`（三重载）/ `joining()` / `joining(delim)` / `joining(delim, prefix, suffix)` / `counting()` / `summingInt` / `summingLong` / `summingDouble` / `averagingInt` / `averagingLong` / `averagingDouble` / `minBy` / `maxBy` / `reducing(...)`（三重重载）/ `mapping(fn, downstream)` / `filtering(pred, downstream)` / `flatMapping` / `collectingAndThen(downstream, finisher)` / `groupingBy(classifier)` / `groupingBy(classifier, downstream)` / `groupingBy(classifier, mapFactory, downstream)` / `groupingByConcurrent`（三重载）/ `partitioningBy(pred)` / `partitioningBy(pred, downstream)` / `teeing(d1, d2, merger)` / `summarizingInt` / `summarizingLong` / `summarizingDouble`。
 
-未提供的收集器——`collectingAndThen`、并发收集器（`toConcurrentMap` / `groupingByConcurrent`）、带 mapFactory 的 `groupingBy`、四参 `toMap`、三参 `toUnmodifiableMap`——见 §7.11。
+`toConcurrentMap` / `groupingByConcurrent` 与本库其他收集器使用同一个"每片一个累加器、按遭遇顺序合并"的并行模型，而不是共享一个并发容器；因此它们保证结果语义与 Java 一致，但不承诺内部容器可被多个线程同时写入。带 `mapFactory` 的重载把结果容器类型从 `HashMap` 放开，但仍要求该类型具备收集器使用的映射接口。
 
 `groupingBy` 是整块最硬的部分：`R = HashMap<K, Downstream::R>`，需要按值持有下游收集器、在一次遍历里同时驱动多组累加器。用 concept 约束下游，`static_assert` 给出可读错误。
 
@@ -829,32 +839,23 @@ Java 把它们挂在 `Stream` / `IntStream` 接口的静态方法上；C++ 的�
 
 `of(values...)` 要求**每个实参的退化类型恰好是 `T`**。C++ 不会像 Java 的推断那样把 `const char*` 提升成 `std::string`，所以字符串要显式写 `Stream<std::string>::of(std::string("a"))`，或改用 `of({"a", "b"})`（`initializer_list` 重载会做转换）。
 
-`Stream.builder()` / `Stream.Builder` 尚未提供，见 §7.11。
+`Stream::builder()` / `Stream<T>::Builder` 已提供。`add` 连写，`build()` 交出流且只能调用一次；构建后再 `add` 或再次 `build` 抛 `IllegalStateException`，与 Java 的单次构建契约一致。
 
 ### 7.11 尚未实现的 Java API（截至本版）
 
-下面是相对 Java 17/21/22 **仍未提供的公开 API**，与 §8 的"行为不一样"分开记录。它们大多是不影响主流程的边缘口子，补齐时按 Java 的方法名与语义实现即可。
+除下面这一项外，Java 17/21/22 主 API 中能在本库架构里表达的部分都已提供；"实现得不一样"仍以 §8 的 38 条为准。
 
 | 区域 | 尚未提供 | 说明 |
 |---|---|---|
-| `Stream` / `BaseStream` | `Stream.builder()` / `Stream.Builder`、`iterator()`、`spliterator()`、`onClose(Runnable)` / `close()`、`toArray(IntFunction)`、`reduce(identity, accumulator, combiner)`、`collect(supplier, accumulator, combiner)` | 拉取式内核没有 spliterator；`builder` 与两个三参终结操作是独立的便利入口 |
-| `Collectors` | `collectingAndThen`、`toConcurrentMap`（3 重载）、`groupingByConcurrent`（3 重载）、`groupingBy(classifier, mapFactory, downstream)`、`toMap(k, v, merge, mapFactory)`、`toUnmodifiableMap(k, v, merge)` | 并发收集器与本库"每片一个累加器、按序合并"的并行模型不匹配；mapFactory 重载需要把结果类型从 `HashMap` 放开 |
-| `Gatherers` / `Gatherer` | `Gatherers.mapConcurrent`；`Gatherer.andThen`；`Gatherer.combiner` | `mapConcurrent` 离开虚拟线程就是 `map`；后两者见 §8 第 34 条 |
-| `Iterable` / `Collection` | `spliterator()`；`toArray(T[])` | `removeIf` 已由 `AbstractCollection` 提供，只是不在 `Collection` 的虚接口上；`toArray(T[])` 在 C++ 里由 `std::vector<T>` 承担 |
-| `List` / `Deque` / `Set`（Java 21 SequencedCollection） | `List.replaceAll`；`reversed()`、`addFirst` / `addLast` / `getFirst` / `getLast` / `removeFirst` / `removeLast` | `LinkedList` 因 `Deque` 已有其中一部分；`TreeSet` 有 `first` / `last` / `pollFirst` / `pollLast`，但没有 `reversed()`。本库的 `Stream::reversed()` 与 `Lists::reversed()` 是另外提供的流/工厂层便利 |
-| `Map` | `compute(key, remappingFunction)`、`replace(key, value)` / `replace(key, oldValue, newValue)`、`replaceAll`、`remove(key, value)`；`Map.Entry.comparingByKey` / `comparingByValue` | `computeIfAbsent` / `computeIfPresent` / `merge` 已有；`Entry` 是值类型（§8 第 12 条） |
-| `Optional` | `or(Supplier<Optional<T>>)`、`toString()` | 其余方法见 §5.5 |
-| `Comparator` | `comparingInt` / `comparingLong` / `comparingDouble`（§8 第 21 条）、`thenComparingInt` / `thenComparingLong` / `thenComparingDouble` | 后三个与 §8 第 21 条同因：不为装箱造方法 |
+| `Stream` / `Iterable` / `Collection` | `spliterator()` | 本库的源与阶段是拉取闭包，没有 Java `Spliterator` 的 `trySplit()`、特征位与尺寸估计协议。`iterator()` 提供单趟遍历，`stream()` 与 `std::ranges` 覆盖其余用途；硬造一个不能切分的 `Spliterator` 只会给出误导性的能力承诺。 |
 
 原始类型流（`IntStream` / `LongStream` / `DoubleStream` 及其 `mapToInt` 等桥接）是**刻意不做**，见 §8 第 7 条，不列入此表。
-
-这份清单只记"未实现"；"实现得不一样"仍以 §8 的 37 条为准。
 
 ---
 
 ## 8. 偏离清单（逐条记录原因）
 
-37 条里 31 条是被语言特性逼出来的，5 条（第 18、20、23、26、36）是主动增益，第 8 条是执行模型上的让步（见 §7.10）；每条都注明了属于哪一类。尚未实现的 API 不在这 37 条里，单独列在 §7.11。
+38 条里 32 条是被语言特性逼出来的，5 条（第 18、20、23、26、36）是主动增益，第 8 条是执行模型上的让步（见 §7.10）；每条都注明了属于哪一类。尚未实现的 API 不在这 38 条里，单独列在 §7.11。
 
 | # | Java | 本库 | 原因 |
 |---|---|---|---|
@@ -865,7 +866,7 @@ Java 把它们挂在 `Stream` / `IntStream` 接口的静态方法上；C++ 的�
 | 5 | `map.put(k,v)` 返回旧值或 null | 返回 `Optional<V>`，空表示原本没有映射 | C++ 无通用空值；与第 4 条同一条规则（null ↔ `Optional::empty`）。`computeIfAbsent` / `computeIfPresent` / `merge` 的回调同样返回 `Optional<V>`，以表达 Java 的"返回 null 表示不建立/删除映射" |
 | 6 | `List.of(a,b,c)` | `Lists::of(a,b,c)` | `List<T>::of` 定义需要 `ArrayList<T>` 完整类型，会造成 `List.h → ArrayList.h → List.h` 环 |
 | 7 | `IntStream` / `LongStream` / `DoubleStream` | 不存在；`Stream<T>` + concept 约束的 `sum` / `average`；`Stream<T>::range` / `rangeClosed` | C++ 无装箱成本，原始类型流的目的消失 |
-| 8 | 并行流 = `Spliterator.trySplit()` 切分源 + ForkJoinPool + `combiner` 归并 | `parallel()` / `parallelStream()` 已实现，标志与顺序语义保真；**执行模型换成"`parallel()` 之后的阶段按批上共享线程池"**（§7.10） | 本库的源是拉取闭包，没有"对半劈开"的信息，复刻 `trySplit()` 等于重写全部中间操作。换来三条必须记住的语义差别：标志只作用于调用点之后、批处理有预读、无界源退化为顺序。副产品是 `Collector::combiner` 成了并行终结操作的硬需求——它一直在构造参数里，这次终于被调用；`Gatherer::combiner` 仍然缺席，因为 `gather` 是可产出任意多元素的屏障 |
+| 8 | 并行流 = `Spliterator.trySplit()` 切分源 + ForkJoinPool + `combiner` 归并 | `parallel()` / `parallelStream()` 已实现，标志与顺序语义保真；**执行模型换成"`parallel()` 之后的阶段按批上共享线程池"**（§7.10） | 本库的源是拉取闭包，没有"对半劈开"的信息，复刻 `trySplit()` 等于重写全部中间操作。换来三条必须记住的语义差别：标志只作用于调用点之后、批处理有预读、无界源退化为顺序。副产品是 `Collector::combiner` 成了并行终结操作的硬需求——它一直在构造参数里，这次终于被调用；`Gatherer::combiner` 已提供并可用于组合 gatherer，但 `gather` 是可产出任意多元素的屏障，所以管道不会主动用它来合并部分状态 |
 | 9 | `Optional<T>` | 自建 `Optional<T>`（内部 `std::optional`），隐式双向转换 | 方法名差异过大，别名保真度不足（§5.5） |
 | 10 | `Collection` 允许元素为 null | 容器拒绝 null，抛 `NullPointerException` | 用户决策；且值类型本就没有 null 概念 |
 | 11 | `list.subList(a,b)` 返回视图 | 返回 `std::unique_ptr<ListView<T>>`，**活视图** | M8 补齐。视图持 `const List<T>*` + 可选的可写指针 + 偏移；生命周期按第 17 条同款"文档而非机制"约束。从 const list 取的视图是只读的，见第 35 条 |
@@ -878,7 +879,7 @@ Java 把它们挂在 `Stream` / `IntStream` 接口的静态方法上；C++ 的�
 | 18 | `Iterable` 不能用于 C++ range-for | 额外提供 `begin()` / `end()`，返回单趟 `input_iterator` 包装 | 纯增益：让 `std::ranges` 算法和 range-for 能直接用。注意是**单趟**，不要拿去做多趟算法 |
 | 19 | `Comparator.equals` | 不提供 | Java 默认实现是引用同一性，`std::function` 无法有意义地复刻 |
 | 20 | `Comparator` 只能 `compare` | 额外提供 `operator()`（`compare < 0`） | 不能交给 `std::sort` / `std::ranges` / `std::map` 的比较器没有使用价值（§5.7） |
-| 21 | `comparingInt` / `comparingLong` / `comparingDouble` | 不存在，用 `comparing` + 自然序 | 与第 7 条同因：避免装箱的理由在 C++ 不成立 |
+| 21 | `comparingInt` / `comparingLong` / `comparingDouble` 与对应的 `thenComparing*` 是原始类型特化 | 同名方法已提供，最终返回泛型的 `Comparator<T>`；double 比较按 Java 的 `Double.compare` 处理 NaN 与 ±0.0 | C++ 没有装箱，原始类型特化在类型层面塌回同一个 `Comparator<T>`；保留 Java 方法名是为了迁移时可读，行为与 Java 一致 |
 | 22 | `Optional.get()` 返回 T | 返回 `const T&`（另有 `&` / `&&` 重载） | Java 返回的也是被引用的对象而非副本，返回引用更贴近引用语义，且免去一次拷贝 |
 | 23 | `Stream` 无 `reversed()` | `Stream<T>::reversed()` | Java 把这个能力放在 `SequencedCollection`（Java 21）上；拉取式管道里加它只需一次缓冲 |
 | 24 | `unordered()` 会打乱遭遇顺序 | 恒等透传 | Java 自己就把它定义为提示而非保证；顺序流保持顺序是合法实现 |
@@ -887,14 +888,15 @@ Java 把它们挂在 `Stream` / `IntStream` 接口的静态方法上；C++ 的�
 | 27 | `Collectors.toList()` 由目标类型推断 `T` | `Collectors::toList<T>()`，元素类型显式给出 | C++ 没有目标类型推断。需要 mapper 结果类型的工厂（`toMap` / `groupingBy`）仍从 lambda 推导，所以那部分读起来与 Java 一致 |
 | 28 | `Iterator` 自己比较自己判断是否耗尽 | `ReadOnlyIterator<T>` + `ReadOnlySentinel` 两个类型 | `std::sentinel_for` 要求哨兵是 `semiregular`（可拷贝），而 `ReadOnlyIterator` 持有单趟游标、故意 move-only。拆出空哨兵后 `std::ranges` 与 range-for 都能用，且 `end()` 零分配 |
 | 29 | `LinkedList implements List, Deque` | `Queue` / `Deque` 接口存在（M8），由 `ArrayDeque` 实现；`LinkedList` 保留同名同义的 `addFirst` / `pollLast` … 但不继承它们 | Java 的两个接口无状态，C++ 里 `List` 与 `Deque` 都是抽象类，同时继承会让 `Collection` 出现两份子对象，需要贯穿整条继承链的虚继承。命名与语义对齐 Java，所以将来若真要做虚继承也不用改签名 |
-| 30 | `TreeSet.subSet` / `TreeMap.subMap` 等返回活视图，另有 `descendingSet` / `descendingMap` | `subSet` / `headSet` / `tailSet` / `subMap` / `headMap` / `tailMap`（含 `fromInclusive` / `toInclusive` 重载）与 `descendingSet` / `descendingMap` / `descendingIterator` / `navigableKeySet` / `descendingKeySet` **全部**是活视图（`TreeSetRangeView` / `TreeMapRangeView` / `TreeMapKeySetView`），栅栏规则与方向语义照 JDK 实测复刻 | 范围视图在值语义里表达"树 + 一对升序栅栏 + 一个方向标志"，代价是每个视图多两个 `std::optional` 与一套栅栏判定，换回来的是写透 / fail-fast / 越界检查 / 双向遍历全部与 Java 一致。M9 一度把 `descending*` 留作"换反向比较器的副本"，M10 推翻了那个取舍：Java 的 `descendingSet` 本就是同一棵树的镜像，做成视图后 `descendingSet().descendingSet()` 能回到原窗口，而副本做不到（§6.8） |
+| 30 | `TreeSet.subSet` / `TreeMap.subMap` 等返回活视图，另有 `descendingSet` / `descendingMap` / `reversed` | `subSet` / `headSet` / `tailSet` / `subMap` / `headMap` / `tailMap`（含 `fromInclusive` / `toInclusive` 重载）与 `descendingSet` / `descendingMap` / `descendingIterator` / `navigableKeySet` / `descendingKeySet` / `reversed` **全部**是活视图（`TreeSetRangeView` / `TreeMapRangeView` / `TreeMapKeySetView`），栅栏规则与方向语义照 JDK 实测复刻 | 范围视图在值语义里表达"树 + 一对升序栅栏 + 一个方向标志"，代价是每个视图多两个 `std::optional` 与一套栅栏判定，换回来的是写透 / fail-fast / 越界检查 / 双向遍历全部与 Java 一致。M9 一度把 `descending*` 留作"换反向比较器的副本"，M10 推翻了那个取舍：Java 的 `descendingSet` 本就是同一棵树的镜像，做成视图后 `descendingSet().descendingSet()` 能回到原窗口，而副本做不到（§6.8）。`reversed()` 是 Java 21 `SequencedCollection` / `SequencedMap` 的同义入口，直接复用同一套方向视图 |
 | 31 | `Collector<T, A, R>` 的 `A` 在 Java 里是 `?` | `A` 必须可命名（`AveragingState`、`KahanSummation`、`DoubleSummaryStatistics`、`std::pair<A1, A2>` 等） | C++ 返回类型不能含未知量；`Collectors::AveragingState` 因此是公开但标注为实现细节的嵌套类型，`KahanSummation` 与 `DoubleSummaryStatistics` 也直接出现在 double 收集器的返回类型里 |
 | 32 | `Map` 的 `keySet` / `values` / `entrySet` / `equals` / `hashCode` 由 `AbstractMap` 提供 | 非虚成员，直接实现在 `Map` 上，由 `visitEntries` 原语驱动 | 若声明为纯虚，`keySet()` 返回 `HashSet<K>` 会强制每个 `TreeMap` 的键可哈希，即使调用者从不需要键集 |
 | 33 | `Downstream.push` 可返回 `false`，`isRejecting()` 可返回 `true` | `push` 恒返回 `true`，`isRejecting()` 恒返回 `false` | 推送的拒绝只发生在短路的下游（如 `limit`）上，而本库的管道是拉取的：`limit` 停止拉取即可，不需要反向通知。gatherer 想提前收工，就从 integrator 返回 `false`——同一个信号，且立刻生效 |
-| 34 | `Gatherer.of(...)` 由目标类型推断 `T` / `R`，且有 `combiner` 与 `andThen` | 类型实参在调用点显式给出（`Gatherers::of<T,R>`）；无 `combiner`；无 `andThen` | C++ 没有目标类型推断，返回类型无法告诉编译器 `R` 是什么。`combiner` 只在并行流里合并部分状态，而 `gather` 即使加了 `parallel()` 也是屏障（它每个输入可产出任意多个元素，§7.10），所以它仍是一个从不被调用的必需参数。`andThen` 在顺序管道里等价于两次 `gather()`（第二个 gatherer 的输入就是第一个的输出，finisher 顺序也一致），因此组合能力本来就在管道层 |
+| 34 | `Gatherer.of(...)` 由目标类型推断 `T` / `R`，`combiner` 供并行合并部分状态 | 类型实参在调用点显式给出（`Gatherers::of<T,A,R>`）；`combiner` / `hasCombiner` / `combine` 与 `andThen` 都已提供，但 `gather` 是屏障，不会主动调用 `combiner` | C++ 没有目标类型推断，返回类型无法告诉编译器 `T` / `R` 是什么。`combiner` 保留了 Java 的接口形状，供自定义 gatherer、`andThen` 与调用者自己管理并行执行时使用；`gather` 每个输入可产出任意多个元素（§7.10），无法安全地把顺序积分的状态分片后合并，因此管道本身仍顺序积分 |
 | 35 | 视图总是可写的（`Collections.unmodifiableList` 除外） | 从 const 容器取到的视图是只读的：所有 mutator、`iterator()` 与交出可写引用的 `forEach` 都抛 `UnsupportedOperationException`，`constIterator()` / range-for 正常；map 范围视图的**可写** `V* get(key)` 重载同样抛，只读读取要走 const 重载（`const V* get(key) const`）。只读视图派生出的子视图也是只读的（**不抛**，与 Java 的 `unmodifiable*` 包装一致）。视图对象自身声明为 `const` 时，mutator 是编译错误而不是运行期异常 | C++ 的 const 是类型系统的一部分。`iterator()` 交出可写引用，而 const 容器没有可写引用可交，所以它必须抛。视图对象自身若不是 const，还多一层编译期保护 |
 | 36 | 无 `sizeHint` / `ofRange` | `Stream<T>::sizeHint()` 与 `Stream<T>::ofRange(range)` | 主动增益，对齐 Java 的 `Spliterator.estimateSize()` 与"任何集合都能成为流源"两件事，见 §7.8 / §7.9 |
 | 37 | 有序容器的比较器是**构造期**的 `Comparator`，`comparator()` 返回它 | 有序容器是 `TreeSet<T, Compare>` / `TreeMap<K, V, Compare>`，`Compare` 是**编译期**的 std 风格 bool 比较器；`comparator()` 返回 Java 风格的 `Comparator<T>`，另有自由函数 `comparatorFrom<T>(Compare)` 做桥接 | C++ 不能在运行期给 `std::set` 换比较器——那是数据结构的一部分，不是参数。所以 `Compare` 只能进模板参数（§6.5），这是"包装 std 容器"的必然结果。但 Java 的 `comparator()` 返回类型是 `Comparator`，且递减视图必须返回真正反向的那一个；std 的 bool 比较器无法取反后仍当 `Compare` 用，因此返回值统一为 `Comparator<T>`，由 `comparatorFrom` 包一层 `std::function`（§11 第 23 条） |
+| 38 | `Optional.or(supplier)` | `Optional.orGet(supplier)` | `or` 是 C++ 关键字，不能作为成员名；语义保持不变，只在 empty 时调用 supplier，且 supplier 返回 `Optional<T>` |
 
 第 18、20、23、26、36 条属于"主动加戏"，其余都是被语言特性逼出来的。加它们的共同理由：纯增益且零风险。一个 C++ 容器库如果不能 `for (auto& x : list)`、一个比较器如果不能交给 `std::sort`，使用体验会立刻劝退；而 `reversed()` 在拉取式管道里只是一个缓冲闭包。
 
@@ -960,9 +962,9 @@ M8 与 M9 里**并行流明确不做**（第 8 条当时固化为"声明但抛"�
 | # | 决策 | 结论 | 影响 |
 |---|---|---|---|
 | 1 | 容器实现策略 | **包装 std 容器**，不自己实现数据结构 | `ArrayList` 包 `std::vector`，`HashMap` 包 `std::unordered_map`，`TreeSet` 包 `std::set` |
-| 2 | 保真 vs 惯用法 | **保真优先** | 方法名、语义、异常行为对齐 Java；37 条偏离逐条记录于 §8 |
+| 2 | 保真 vs 惯用法 | **保真优先** | 方法名、语义、异常行为对齐 Java；38 条偏离逐条记录于 §8 |
 | 3 | 容器 null 语义 | **拒绝 null**，抛 `NullPointerException` | 值类型本无 null 概念，只对指针/可空类型做检查 |
-| 4 | 并行流 | **做，但执行模型自定**（§7.10） | `parallel()` / `parallelStream()` 是真的；阶段按批上共享线程池，配 `Budget` 拉取预算界定预读。与 Java 的三点差别记在 §8 第 8 条；`Gatherer::combiner` 仍然缺席（`gather` 是屏障） |
+| 4 | 并行流 | **做，但执行模型自定**（§7.10） | `parallel()` / `parallelStream()` 是真的；阶段按批上共享线程池，配 `Budget` 拉取预算界定预读。与 Java 的三点差别记在 §8 第 8 条；`Gatherer::combiner` 已提供，但 `gather` 是屏障，管道不会主动用它合并部分状态 |
 | 5 | 测试框架 | **doctest**，单头文件 vendor | configure 阶段不联网；`add_test` 而非 `doctest_discover_tests` |
 | 6 | 构建环境 | CLion 2026.2.1 内置 CMake 4.3.1 / Ninja 1.13.2 / GDB + 系统 `g++ 16.2.1` | 见 §4；`cmake_minimum_required(VERSION 3.25)`，对 CMake 4.x 合法 |
 | 7 | 命名 | **驼峰**：类/结构体/概念大驼峰，函数/变量/枚举值小驼峰 | private 成员允许尾下划线（`modCount_`）作为撞名消歧后缀 |
@@ -1107,7 +1109,7 @@ M10 结束时唯一的记录在案缺口就是并行流，且当时的口径是"
 1. **`Parallel.h`**：固定大小的线程池单例，`forEach(count, fn)` 用共享游标动态派活、异常在收拢后重抛；`thread_local` 标志让池内发起的并行阶段内联执行，把嵌套并行的死锁换成嵌套降级（ForkJoinPool 用 work-stealing 解决同一问题）。`cppstream::setParallelism(n)` 只改"可用 worker 数"这个 atomic，不建销线程，所以可以在任意时刻调用。
 2. **`Budget` 与 `sizeHint` 分家**：`sizeHint` 是"这个阶段会产出多少"（`filter` 丢掉），`Budget` 是"这个阶段能往前读多少"（`filter` 保留）。批次大小取 `min(chunk, Budget 剩余)`，且 `Budget` 只会被收紧；源无界时是 `nullopt`，阶段退化为一次一个元素——`iterate(...).parallel().findFirst()` 因此不会预读挂死，`generate(...).parallel().limit(n)` 也能正常终止而无需任何特殊处理。
 3. **一元阶段批并行**：`map` / `filter` / `peek` 共用一个 `mapBatch`（`step` 把元素映射成 `optional<R>`，`nullopt` 表示丢弃，`filter` 就是这么写的），结果按 `out[i] ↔ in[i]` 写回，遭遇顺序天然保持。`flatMap` 用 `flatBatch`：只有外层批次是急切的，内层流仍然惰性按序排空，所以"内层无限 + `limit`"依旧成立。
-4. **终结操作分片合并**：`collect` / `reduce`（两种）/ `min` / `max` / `sum` 走同一个 `runParallelReduce`：一批切成 `parallelism()` 片，各片独立累加后**按遭遇顺序**逐个 `combiner` 合并。`Collector::combiner` 与 `Gatherer::combiner` 那个悬念就此落地——前者被调用（它从 M4 起就是构造参数），后者仍然缺席，因为 `gather` 是屏障。合并顺序保证 `toList` / `joining` / `groupingBy` 在并行下与顺序版逐字节相同。
+4. **终结操作分片合并**：`collect` / `reduce`（两种）/ `min` / `max` / `sum` 走同一个 `runParallelReduce`：一批切成 `parallelism()` 片，各片独立累加后**按遭遇顺序**逐个 `combiner` 合并。`Collector::combiner` 与 `Gatherer::combiner` 那个悬念就此落地——前者被调用（它从 M4 起就是构造参数），后者在 M12 补齐了 API，但 `gather` 是屏障，管道不会主动调用它。合并顺序保证 `toList` / `joining` / `groupingBy` 在并行下与顺序版逐字节相同。
 5. **短路与顺序的边界照旧**：三种 `match` 并行求值但一批命中即停止拉取；`findFirst` / `findAny` 仍只拉一个元素（有界并行流不会被它抽干）；`forEachOrdered` / `count` / `toArray` / `toList` / `average` 顺序执行；`sorted` / `reversed` / `distinct` / `mapMulti` / `gather` 是屏障，但并行标志继续往下传。
 
 **测试规模（M11 结束时）**：242 个 `TEST_CASE` / 1490 条断言 + 6 个 CTest 用例，三种配置（Debug、`-Werror`、ASan+UBSan）全部通过；`-fno-rtti` 亦可直接构建。新增测试单元 `testParallel.cpp`（19 个用例）：每条路径都拿顺序版当基准对拍，另有"并行确实用了多个线程"（`set<thread::id>` 计数）、"池内嵌套不死锁"、"无界源不预读"（`CountingSource` 数拉取次数）、"异常穿出并行阶段"、"`setParallelism(1)` 整体退化"、"`collect` 在 `groupingBy` 这类顺序敏感收集器上与顺序版相等"几条专门的用例。`Collection::parallelStream()` 让"先设标志再建阶段"成为默认写法。
@@ -1121,6 +1123,17 @@ M10 结束时唯一的记录在案缺口就是并行流，且当时的口径是"
 
 **测试规模（M11 之后）**：245 个 `TEST_CASE` / 1508 条断言 + 6 个 CTest 用例，四种配置（Debug、Release、`-Werror`、ASan+UBSan）全部通过。
 
+### M12 — 补齐 Java API 缺口（✅）
+
+- **Stream 入口**：`builder()` / `Builder`、`iterator()`、`onClose()` / `close()`、`toArray(generator)`、三参 `reduce` 与三参 `collect`。关闭钩子由 `StreamCloseState` 沿管道共享，只执行一次；终结操作不会隐式关闭流。
+- **Collectors**：`collectingAndThen`、四参 `toMap`、三参 `toUnmodifiableMap`、带 `mapFactory` 的 `groupingBy`，以及 `toConcurrentMap` / `groupingByConcurrent` 全套命名别名。并发收集器沿用"每片一个累加器、按序合并"的模型，不承诺共享累加器。
+- **Gatherer**：补齐 `combiner()` / `hasCombiner()` / `combine()`、四参构造、`andThen`；`mapConcurrent` 改为最多 `maxConcurrency` 个 `std::async` 任务并保持遭遇顺序，不再只是顺序 `map`。
+- **容器与 Map**：`Collection::toArray(vector&)`、`List::replaceAll` 与 Java 21 首尾/反向方法、`Deque::reversed()` 活视图、`TreeSet` / `TreeMap` 的 `reversed()` 同义入口、`Map.compute` / `replace` / `replaceAll` / `remove(k,v)` / `Entry` 比较器。
+- **Optional 与 Comparator**：`Optional.orGet` / `toString`，以及 `comparingInt` / `comparingLong` / `comparingDouble` 与对应 `thenComparing*`。
+- 修掉 `Map::compute` 先 move 入表再返回同一对象导致字符串读成空串的 bug，并加了非平凡类型回归测试。
+
+**测试规模（M12 结束时）**：272 个 `TEST_CASE` / 1620 条断言 + 6 个 CTest 用例。
+
 ### 下一步 — 未做的部分
 
-缺口已按类别集中列在 §7.11：主流程（惰性管道、容器、收集器、并行）都在，剩下的是 `Stream.builder` / 迭代器入口 / 关闭钩子、少数收集器与集合便利方法，以及 `Gatherers::mapConcurrent`。`mapConcurrent` 之所以特殊，是因为 Java 把它定义在虚拟线程上，离开那一层它就是一个 `map`（§7.7）；其余缺口是尚未铺开的便利 API，不是机制上的空缺。
+缺口已按类别集中列在 §7.11：主流程（惰性管道、容器、收集器、并行）都在，唯一仍未提供的公开 API 是 `spliterator()`；原始类型流则是刻意不做（§8 第 7 条）。`Gatherers::mapConcurrent` 已用有界并发任务实现，不再只是顺序 `map`。
